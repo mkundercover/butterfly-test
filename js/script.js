@@ -85,32 +85,27 @@ function proceed() {
 function createSwarm(swarmContainer) {
   const numButterflies = 90;
 
-  // Tunnel extends along -Z (depth, away from user at entrance).
-  // Width spreads on X, height on Y. cameraHeight offsets Y so ground = real floor.
+  // Tunnel: 28m along X axis (butterflies fly right→left past the user).
+  // Depth (Z) spreads butterflies in front of user across tunnel width (7.5m).
+  // Height: ~2m above ground with small natural variation.
   const tunnelLength = 28;
   const tunnelWidth  = 7.5;
-  const tunnelHeight = 3.3;
-  const groundOffset = 0.5;
-  const cameraHeight = 1.6; // approximate phone height at start (adjusts Y to real floor)
+  const povDistance  = 1;    // closest butterflies 1m in front
+  const cameraHeight = 1.6;  // phone height at SLAM start — offsets Y to real ground
+  const heightBase   = 2.0;  // target height above ground (metres)
+  const heightJitter = 0.4;  // ±0.4m natural variation
 
-  const cols = 13; // X divisions (width)
-  const rows = 12; // Y divisions (height)
+  const numZSlots = 13; // lanes of depth across tunnel width
 
-  // Grid fills the XY cross-section of the tunnel entrance
-  let grid = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      grid.push({
-        x: (c / (cols - 1)) * tunnelWidth - tunnelWidth / 2,
-        y: (r / (rows - 1)) * tunnelHeight + groundOffset - cameraHeight,
-      });
-    }
-  }
-  grid.sort(() => Math.random() - 0.5);
+  // One Z lane per slot; each butterfly gets a slightly different random height
+  const zSlots = Array.from({length: numZSlots}, (_, c) =>
+    -((c / (numZSlots - 1)) * tunnelWidth + povDistance)
+  );
 
   for (let i = 0; i < numButterflies; i++) {
-    let butterfly = document.createElement('a-entity');
-    const slot = grid[i % grid.length];
+    const butterfly = document.createElement('a-entity');
+    const z = zSlots[i % numZSlots];
+    const y = (heightBase + (Math.random() * 2 - 1) * heightJitter) - cameraHeight;
 
     butterfly.setAttribute('gltf-model', '#butterflyModel');
     butterfly.setAttribute('animation-mixer', 'clip: Flying');
@@ -118,24 +113,19 @@ function createSwarm(swarmContainer) {
     butterfly.setAttribute('butterfly-color', 'color: #ce0058');
 
     const resetButterfly = (el, isFirstSpawn = false) => {
-      const endZ = -tunnelLength;
-      const moveDuration = Math.random() * 4000 + 10000;
-      let startZ, currentDuration;
+      const startX = tunnelLength / 2;
+      const endX   = -(tunnelLength / 2);
+      const currentSpawnX = isFirstSpawn ? (Math.random() * tunnelLength - startX) : startX;
+      const moveDuration  = Math.random() * 4000 + 10000;
+      const distanceRatio = isFirstSpawn ? Math.abs(currentSpawnX - endX) / tunnelLength : 1;
+      const currentDuration = moveDuration * distanceRatio;
 
-      if (isFirstSpawn) {
-        startZ = -(Math.random() * tunnelLength); // scatter throughout tunnel on first spawn
-        currentDuration = moveDuration * (Math.abs(startZ - endZ) / tunnelLength);
-      } else {
-        startZ = 0; // respawn at entrance
-        currentDuration = moveDuration;
-      }
-
-      el.setAttribute('position', `${slot.x} ${slot.y} ${startZ}`);
+      el.setAttribute('position', `${currentSpawnX} ${y} ${z}`);
       el.setAttribute('rotation', '0 -90 0');
 
       el.setAttribute('animation__move', {
         property: 'position',
-        to: `${slot.x} ${slot.y} ${endZ}`,
+        to: `${endX} ${y} ${z}`,
         dur: currentDuration,
         easing: 'linear'
       });
@@ -150,10 +140,7 @@ function createSwarm(swarmContainer) {
       });
     };
 
-    butterfly.addEventListener('animationcomplete__move', () => {
-      resetButterfly(butterfly, false);
-    });
-
+    butterfly.addEventListener('animationcomplete__move', () => resetButterfly(butterfly, false));
     swarmContainer.appendChild(butterfly);
     resetButterfly(butterfly, true);
   }
@@ -163,22 +150,23 @@ function createSwarm(swarmContainer) {
 function addDebugWireframe(scene) {
   const tunnelLength = 28;
   const tunnelWidth  = 7.5;
-  const tunnelHeight = 3.3;
-  const groundOffset = 0.5;
+  const povDistance  = 1;
   const cameraHeight = 1.6;
-  const cols = 13, rows = 12;
+  const heightBase   = 2.0;
+  const numZSlots    = 13;
 
-  const centerY = groundOffset + tunnelHeight / 2 - cameraHeight; // 0.55
-  const centerZ = -tunnelLength / 2;                               // -14
+  const centerY = heightBase - cameraHeight;           // 0.4m above SLAM origin
+  const centerZ = -(povDistance + tunnelWidth / 2);    // -4.75m
 
   const group = document.createElement('a-entity');
   group.id = 'debug-wireframe';
 
+  // Wireframe box showing the butterfly volume
   const box = document.createElement('a-box');
   box.setAttribute('position', `0 ${centerY} ${centerZ}`);
-  box.setAttribute('width', tunnelWidth);   // X
-  box.setAttribute('height', tunnelHeight); // Y
-  box.setAttribute('depth', tunnelLength);  // Z
+  box.setAttribute('width', tunnelLength);  // X: 28m flight path
+  box.setAttribute('height', 0.8);          // Y: ±0.4m jitter band
+  box.setAttribute('depth', tunnelWidth);   // Z: 7.5m depth spread
   box.setAttribute('material', 'color: #fe5000; wireframe: true; opacity: 1');
   group.appendChild(box);
 
@@ -190,10 +178,10 @@ function addDebugWireframe(scene) {
     group.appendChild(line);
   });
 
-  // Green cone = tunnel entrance (z=0), orange cone = far end (z=-28)
+  // Green cone = butterflies enter from right (+X), orange = exit left (-X)
   const start = document.createElement('a-cone');
-  start.setAttribute('position', `0 ${centerY} 0`);
-  start.setAttribute('rotation', '90 0 0');
+  start.setAttribute('position', `${tunnelLength / 2} ${centerY} ${centerZ}`);
+  start.setAttribute('rotation', '0 0 -90');
   start.setAttribute('radius-bottom', '0.3');
   start.setAttribute('radius-top', '0');
   start.setAttribute('height', '0.8');
@@ -201,30 +189,27 @@ function addDebugWireframe(scene) {
   group.appendChild(start);
 
   const end = document.createElement('a-cone');
-  end.setAttribute('position', `0 ${centerY} ${-tunnelLength}`);
-  end.setAttribute('rotation', '-90 0 0');
+  end.setAttribute('position', `${-(tunnelLength / 2)} ${centerY} ${centerZ}`);
+  end.setAttribute('rotation', '0 0 90');
   end.setAttribute('radius-bottom', '0.3');
   end.setAttribute('radius-top', '0');
   end.setAttribute('height', '0.8');
   end.setAttribute('color', '#ff5500');
   group.appendChild(end);
 
-  // Grid dots on XY cross-section at entrance (z=0)
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = (c / (cols - 1)) * tunnelWidth - tunnelWidth / 2;
-      const y = (r / (rows - 1)) * tunnelHeight + groundOffset - cameraHeight;
-      const dot = document.createElement('a-sphere');
-      dot.setAttribute('position', `${x} ${y} 0`);
-      dot.setAttribute('radius', '0.05');
-      dot.setAttribute('color', '#888');
-      dot.setAttribute('material', 'opacity: 0.5; emissive: #444; emissiveIntensity: 0.5');
-      group.appendChild(dot);
-    }
+  // Dots at each Z slot depth
+  for (let c = 0; c < numZSlots; c++) {
+    const z = -((c / (numZSlots - 1)) * tunnelWidth + povDistance);
+    const dot = document.createElement('a-sphere');
+    dot.setAttribute('position', `0 ${centerY} ${z}`);
+    dot.setAttribute('radius', '0.07');
+    dot.setAttribute('color', '#888');
+    dot.setAttribute('material', 'opacity: 0.6; emissive: #444; emissiveIntensity: 0.5');
+    group.appendChild(dot);
   }
 
   scene.appendChild(group);
 
   const hud = document.getElementById('debug-hud');
-  if (hud) hud.innerHTML = '<b>DEBUG ON</b> · tunnel 28×7.5×3.3 · +X rosso · +Y verde · -Z blu=tunnel';
+  if (hud) hud.innerHTML = `<b>DEBUG ON</b> · farfalle a ${heightBase}m suolo · volo ±X 28m · profondità Z 7.5m`;
 }
