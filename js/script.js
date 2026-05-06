@@ -83,23 +83,23 @@ function proceed() {
 
 // ──  Swarm logic (unchanged from original)  ────────────────────────
 function createSwarm(swarmContainer) {
+  const cameraHeight = 1.6; // meters, typical user eye height
+
   const numButterflies = 90;
 
   // Tunnel: 28m along X axis (butterflies fly right→left past the user).
-  // Depth (Z) spreads butterflies in front of user across tunnel width (7.5m).
-  // Height: ~2m above ground with small natural variation.
+  // Depth (Z): butterflies spread 0.5m–3m in front — close enough to see well.
+  // Height: 2m above SLAM origin (y=0 ≈ ground in 8thwall), ±0.4m natural jitter.
   const tunnelLength = 28;
-  const tunnelWidth  = 7.5;
-  const povDistance  = 1;    // closest butterflies 1m in front
-  const cameraHeight = 1.6;  // phone height at SLAM start — offsets Y to real ground
-  const heightBase   = 2.0;  // target height above ground (metres)
-  const heightJitter = 0.4;  // ±0.4m natural variation
+  const zNear        = 0.5;  // closest butterflies 0.5m in front
+  const zFar         = 8.0;  // farthest butterflies 8m in front (expanded volume)
+  const heightBase   = 3.5;  // metres above ground (raised flight altitude)
+  const heightJitter = 0.6;  // ±0.6m natural variation
 
-  const numZSlots = 13; // lanes of depth across tunnel width
+  const numZSlots = 13; // depth lanes
 
-  // One Z lane per slot; each butterfly gets a slightly different random height
   const zSlots = Array.from({length: numZSlots}, (_, c) =>
-    -((c / (numZSlots - 1)) * tunnelWidth + povDistance)
+    -(zNear + (c / (numZSlots - 1)) * (zFar - zNear))
   );
 
   for (let i = 0; i < numButterflies; i++) {
