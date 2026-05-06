@@ -2,6 +2,17 @@
 body {
   margin: 0;
   overflow: hidden;
+  background: #000;
+}
+
+/* A-Frame canvas must be transparent so 8thwall camera shows through */
+.a-enter-vr-button,
+.a-enter-ar-button {
+  display: none !important;
+}
+
+.a-orientation-modal {
+  z-index: 2000 !important;
 }
 
 #overlay {

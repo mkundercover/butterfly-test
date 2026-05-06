@@ -1,4 +1,4 @@
-// 1. Registrazione Componente Personalizzato per il Colore
+// ──  Custom component: wing color  ──────────────────────────────────
 AFRAME.registerComponent('butterfly-color', {
   schema: { color: { type: 'color', default: '#ce0058' } },
   init: function () { this.el.addEventListener('model-loaded', () => this.applyColor()); },
@@ -11,86 +11,93 @@ AFRAME.registerComponent('butterfly-color', {
     mesh.traverse((node) => {
       if (node.isMesh && node.material && node.material.name === 'Wings') {
         node.material.color.copy(newColor);
-        node.material.emissive.copy(newColor); 
-        node.material.emissiveIntensity = 15;        
+        node.material.emissive.copy(newColor);
+        node.material.emissiveIntensity = 15;
       }
     });
   }
 });
 
-// 2. Variabili di Stato
-let sensorsActive = false;
+// ──  State  ────────────────────────────────────────────────────────
 let experienceActivated = false;
+let realityReadyFired = false;
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
-// HUD debug visibile SUBITO al load (così sai che ?debug è attivo prima della calibrazione)
+// Track realityready early in case it fires before the user clicks START
+window.addEventListener('DOMContentLoaded', () => {
+  const scene = document.querySelector('a-scene');
+  if (scene) {
+    scene.addEventListener('realityready', () => { realityReadyFired = true; });
+  }
+});
+
+// HUD debug visibile SUBITO al load
 if (DEBUG) {
   window.addEventListener('DOMContentLoaded', () => {
     const hud = document.createElement('div');
     hud.id = 'debug-hud';
     hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#fe5000;padding:8px 12px;font:12px ui-monospace,monospace;border:1px solid #fe5000;border-radius:4px;pointer-events:none';
-    hud.innerHTML = '<b>DEBUG ON</b> · attendi START + calibrazione';
+    hud.innerHTML = '<b>DEBUG ON</b> · attendi START';
     document.body.appendChild(hud);
   });
 }
 
-// 3. Gestione Permessi
+// ──  Start flow  ───────────────────────────────────────────────────
 function startExperience() {
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+  // iOS 13+ requires explicit permission request for DeviceOrientation
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission().then(response => {
-      if (response == 'granted') { proceed(); }
+      if (response === 'granted') { proceed(); }
     }).catch(console.error);
-  } else { 
-    proceed(); 
+  } else {
+    proceed();
   }
 }
 
 function proceed() {
-  sensorsActive = true;
   document.getElementById('status-msg').classList.add('hidden');
   document.getElementById('calibration-msg').classList.remove('hidden');
+
+  const scene = document.querySelector('a-scene');
+
+  const activate = () => {
+    if (experienceActivated) return;
+    experienceActivated = true;
+    document.getElementById('overlay').classList.add('hidden');
+    if (DEBUG) addDebugWireframe(scene);
+    createSwarm(document.querySelector('#swarm'));
+  };
+
+  // realityready may already have fired before START was clicked
+  if (realityReadyFired) {
+    activate();
+    return;
+  }
+
+  scene.addEventListener('realityready', activate);
+
+  // Fallback: if realityready doesn't fire within 8s, activate anyway
+  setTimeout(activate, 8000);
 }
 
-// 4. Controllo Calibrazione e Attivazione
-window.addEventListener('load', () => {
-  const swarm = document.querySelector('#swarm');
-  const camera = document.querySelector('#main-camera');
-  const overlay = document.querySelector('#overlay');
-
-  setInterval(() => {
-    if (!sensorsActive || experienceActivated) return;
-
-    if (camera.object3D) {
-      const rotation = camera.getAttribute('rotation');
-      
-      // Attivazione quando il telefono è verticale (pitch tra -25° e 25°)
-      if (rotation && rotation.x > -25 && rotation.x < 25) {
-        experienceActivated = true;
-        overlay.classList.add('hidden');
-        createSwarm(swarm);
-        if (DEBUG) addDebugWireframe(document.querySelector('a-scene'));
-      }
-    }
-  }, 200);
-});
-
-// 5. Logica dello Sciame tarata sul tunnel reale (28m x 7.5m) - da cliente: larghezza 9,5m, lunghezza 28m, altezza 3,3m.
+// ──  Swarm logic (unchanged from original)  ────────────────────────
 function createSwarm(swarmContainer) {
   const numButterflies = 90;
-  
-  const tunnelLength = 28; 
-  const tunnelWidth = 7.5; //9,5 - 2m circa di "passerella"
+
+  const tunnelLength = 28;
+  const tunnelWidth = 7.5;
   const tunnelHeight = 3.3;
   const groundOffset = 0.5;
   const povDistance = 1;
 
-  const rows = 12; 
+  const rows = 12;
   const cols = 13;
-  
+
   let grid = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      grid.push({ 
+      grid.push({
         y: (r / (rows - 1)) * tunnelHeight + groundOffset,
         z: -((c / (cols - 1)) * tunnelWidth + povDistance)
       });
@@ -101,61 +108,50 @@ function createSwarm(swarmContainer) {
   for (let i = 0; i < numButterflies; i++) {
     let butterfly = document.createElement('a-entity');
     const slot = grid[i % grid.length];
-    
+
     butterfly.setAttribute('gltf-model', '#butterflyModel');
     butterfly.setAttribute('animation-mixer', 'clip: Flying');
     butterfly.setAttribute('scale', '0.2 0.15 0.2');
     butterfly.setAttribute('butterfly-color', 'color: #ce0058');
 
-    // Funzione di reset modificata
     const resetButterfly = (el, isFirstSpawn = false) => {
       const startX = tunnelLength / 2;
       const endX = -(tunnelLength / 2);
-      
-      // Se è la prima apparizione, spawniamo in un punto a caso lungo la X
-      // Altrimenti, partono sempre dall'inizio (startX)
       const currentSpawnX = isFirstSpawn ? (Math.random() * tunnelLength - startX) : startX;
-      
       const moveDuration = Math.random() * 4000 + 10000;
-      
-      // Calcoliamo una durata proporzionale alla distanza rimanente per il primo volo
-      // per evitare che le farfalle a metà tunnel vadano troppo lente
       const distanceRatio = isFirstSpawn ? Math.abs(currentSpawnX - endX) / tunnelLength : 1;
       const currentDuration = moveDuration * distanceRatio;
 
       el.setAttribute('position', `${currentSpawnX} ${slot.y} ${slot.z}`);
       el.setAttribute('rotation', '0 -90 0');
-      
+
       el.setAttribute('animation__move', {
-        property: 'position', 
+        property: 'position',
         to: `${endX} ${slot.y} ${slot.z}`,
-        dur: currentDuration, 
+        dur: currentDuration,
         easing: 'linear'
       });
-      
+
       el.setAttribute('animation__color', {
-        property: 'butterfly-color.color', 
-        from: '#ce0058', 
+        property: 'butterfly-color.color',
+        from: '#ce0058',
         to: '#fe5000',
-        dur: currentDuration * 0.5, 
+        dur: currentDuration * 0.5,
         easing: 'linear',
         loop: false
       });
     };
 
     butterfly.addEventListener('animationcomplete__move', () => {
-      // Dal secondo volo in poi, isFirstSpawn è false (partono dal fondo)
       resetButterfly(butterfly, false);
     });
 
-    // Rimosso il setTimeout: aggiungiamo tutto subito
     swarmContainer.appendChild(butterfly);
-    // Passiamo true per distribuire le farfalle ovunque all'avvio
     resetButterfly(butterfly, true);
   }
 }
 
-// 6. Debug wireframe overlay (?debug nell'URL)
+// ──  Debug wireframe overlay (?debug in URL)  ──────────────────────
 function addDebugWireframe(scene) {
   const tunnelLength = 28;
   const tunnelWidth = 7.5;
@@ -167,7 +163,6 @@ function addDebugWireframe(scene) {
   const group = document.createElement('a-entity');
   group.id = 'debug-wireframe';
 
-  // Box wireframe del tunnel
   const box = document.createElement('a-box');
   box.setAttribute('position', `0 ${(groundOffset + tunnelHeight + groundOffset) / 2} ${-(povDistance + tunnelWidth / 2)}`);
   box.setAttribute('width', tunnelLength);
@@ -176,7 +171,6 @@ function addDebugWireframe(scene) {
   box.setAttribute('material', 'color: #fe5000; wireframe: true; opacity: 1');
   group.appendChild(box);
 
-  // Assi all'origine (X rosso, Y verde, -Z blu)
   ['x:1 0 0:#ff0000', 'y:0 1 0:#00ff00', 'z:0 0 -1:#0066ff'].forEach(s => {
     const [, dir, color] = s.split(':');
     const [dx, dy, dz] = dir.split(' ').map(Number);
@@ -185,7 +179,6 @@ function addDebugWireframe(scene) {
     group.appendChild(line);
   });
 
-  // Marker START e END
   const start = document.createElement('a-cone');
   start.setAttribute('position', `14 2 -4.75`);
   start.setAttribute('rotation', '0 0 -90');
@@ -204,7 +197,6 @@ function addDebugWireframe(scene) {
   end.setAttribute('color', '#ff5500');
   group.appendChild(end);
 
-  // Tutti i 156 slot griglia (sferette)
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const y = (r / (rows - 1)) * tunnelHeight + groundOffset;
@@ -220,7 +212,6 @@ function addDebugWireframe(scene) {
 
   scene.appendChild(group);
 
-  // Aggiorna HUD esistente
   const hud = document.getElementById('debug-hud');
-  if (hud) hud.innerHTML = '<b>DEBUG ON</b> · tunnel 28×7.5×3.3 · X rosso · Y verde · -Z blu';
+  if (hud) hud.innerHTML = '<b>DEBUG ON</b> · tunnel 28×7.5×3.3 · X rosso · Y verde · -Z blu (8thwall SLAM)';
 }
