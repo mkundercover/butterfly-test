@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Tunnel Wireframe — Debug Layout</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script src="vendor/aframe-1.3.0.min.js"></script>
+  <script src="vendor/aframe-extras-6.1.1.min.js"></script>
+  <style>
+    body { margin: 0; background: #000; }
+    #info {
+      position: fixed; top: 10px; left: 10px; z-index: 1000;
+      background: rgba(0,0,0,0.85); color: #fe5000;
+      padding: 14px 16px; font-family: ui-monospace, monospace;
+      font-size: 12px; max-width: 380px; line-height: 1.55;
+      border: 1px solid #fe5000; border-radius: 6px;
+    }
+    #info b { color: #ce0058; }
+    #info code { color: #fff; background: #222; padding: 1px 4px; border-radius: 3px; }
+    #presets {
+      position: fixed; bottom: 10px; left: 10px; z-index: 1000;
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    #presets button {
+      background: #fe5000; color: #000; border: none;
+      padding: 8px 12px; font-family: monospace; font-size: 12px;
+      cursor: pointer; border-radius: 4px; font-weight: bold;
+    }
+    #presets button:hover { background: #ff7733; }
+  </style>
+</head>
+<body>
+
+  <div id="info">
+    <b>Tunnel wireframe</b> — 28 × 7.5 × 3.3 m<br>
+    <span style="color:#fe5000">━</span> box arancione = bordi tunnel<br>
+    <span style="color:#0f0">●</span> 90 slot occupati (1 farfalla)<br>
+    <span style="color:#666">●</span> 66 slot vuoti (griglia 12×13)<br>
+    <span style="color:#0f0">━</span> traiettoria volo (X: +14 → -14)<br>
+    <span style="color:#f00">●</span> spettatore (camera AR origine)<br>
+    <span style="color:#1a4480">▭</span> passerella (~1m vicino spettatore)<br>
+    <br>
+    <b>Controlli:</b> <code>WASD</code> muovi · <code>drag</code> ruota<br>
+    <b>Mobile:</b> usa i preset qui sotto ↓
+  </div>
+
+  <div id="presets">
+    <button onclick="setView('spectator')">👁 Vista spettatore</button>
+    <button onclick="setView('top')">⬆ Top-down</button>
+    <button onclick="setView('side')">↔ Laterale</button>
+    <button onclick="setView('iso')">⊿ Isometrica</button>
+    <button onclick="setView('start')">▶ Da START</button>
+  </div>
+
+  <a-scene background="color: #0a0a14" renderer="colorManagement: true; antialias: true">
+
+    <a-assets>
+      <a-asset-item id="butterflyModel" src="assets/models/animated_butterfly_fucsia.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- Tunnel wireframe box -->
+    <!-- X: -14..+14 (len 28), Y: 0.5..3.8 (height 3.3), Z: -8.5..-1 (width 7.5) -->
+    <a-box position="0 2.15 -4.75"
+           width="28" height="3.3" depth="7.5"
+           material="color: #fe5000; wireframe: true; opacity: 1"></a-box>
+
+    <!-- Pavimento del tunnel -->
+    <a-plane position="0 0 -4.75" rotation="-90 0 0"
+             width="28" height="7.5"
+             material="color: #1a1a2a; side: double"></a-plane>
+
+    <!-- Soffitto -->
+    <a-plane position="0 3.8 -4.75" rotation="90 0 0"
+             width="28" height="7.5"
+             material="color: #2a2a3a; opacity: 0.3; side: double"></a-plane>
+
+    <!-- Passerella (zona spettatore, ~1m davanti al primo slot) -->
+    <a-plane position="0 0.02 -0.5" rotation="-90 0 0"
+             width="28" height="1"
+             material="color: #1a4480; opacity: 0.7; side: double"></a-plane>
+
+    <!-- Origine / spettatore -->
+    <a-sphere position="0 1.6 0" radius="0.25" color="#ff0000" material="emissive: #ff0000; emissiveIntensity: 0.8"></a-sphere>
+    <a-cone position="0 1.6 -0.6" rotation="-90 0 0" radius-bottom="0.15" radius-top="0" height="0.4" color="#ff0000"></a-cone>
+    <a-text value="SPETTATORE\n(camera AR)" position="0 2.4 0" align="center" color="#ff0000" width="5"></a-text>
+
+    <!-- Marker direzione START e END -->
+    <a-cone position="14 2 -4.75" rotation="0 0 -90" radius-bottom="0.3" radius-top="0" height="0.8" color="#00ff00"></a-cone>
+    <a-text value="START\nX = +14" position="14.5 2.8 -4.75" align="left" color="#00ff00" width="6"></a-text>
+
+    <a-cone position="-14 2 -4.75" rotation="0 0 90" radius-bottom="0.3" radius-top="0" height="0.8" color="#ff5500"></a-cone>
+    <a-text value="END\nX = -14" position="-14.5 2.8 -4.75" align="right" color="#ff5500" width="6"></a-text>
+
+    <!-- Assi di riferimento all'origine -->
+    <a-entity line="start: 0 0 0; end: 2 0 0; color: #ff0000"></a-entity>
+    <a-entity line="start: 0 0 0; end: 0 2 0; color: #00ff00"></a-entity>
+    <a-entity line="start: 0 0 0; end: 0 0 -2; color: #0066ff"></a-entity>
+    <a-text value="X" position="2.2 0 0" color="#ff0000" width="3"></a-text>
+    <a-text value="Y" position="0 2.2 0" color="#00ff00" width="3"></a-text>
+    <a-text value="-Z" position="0 0 -2.2" color="#0066ff" width="3"></a-text>
+
+    <!-- Slot grid (generata da JS) -->
+    <a-entity id="grid"></a-entity>
+
+    <!-- Una farfalla campione per scala -->
+    <a-entity id="sampleButterfly"
+              gltf-model="#butterflyModel"
+              animation-mixer="clip: Flying"
+              scale="0.2 0.15 0.2"
+              position="0 1.8 -3"
+              rotation="0 -90 0"></a-entity>
+    <a-text value="↑ farfalla scala reale\n(0.2 × 0.15 × 0.2)" position="0 2.3 -3" align="center" color="#ce0058" width="3"></a-text>
+
+    <!-- Luci -->
+    <a-light type="ambient" intensity="0.7"></a-light>
+    <a-light type="directional" intensity="0.6" position="5 10 5"></a-light>
+
+    <!-- Camera libera (WASD + look-controls) -->
+    <a-entity id="rig" position="18 6 6" rotation="-15 60 0">
+      <a-camera wasd-controls="acceleration: 30" look-controls></a-camera>
+    </a-entity>
+
+  </a-scene>
+
+  <script>
+    // Stessa logica di script.js per riprodurre fedelmente la griglia
+    const tunnelWidth = 7.5;
+    const tunnelHeight = 3.3;
+    const groundOffset = 0.5;
+    const povDistance = 1;
+    const rows = 12;
+    const cols = 13;
+
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        grid.push({
+          y: (r / (rows - 1)) * tunnelHeight + groundOffset,
+          z: -((c / (cols - 1)) * tunnelWidth + povDistance)
+        });
+      }
+    }
+    grid.sort(() => Math.random() - 0.5);
+
+    const container = document.getElementById('grid');
+    grid.forEach((slot, i) => {
+      const used = i < 90;
+
+      // Sfera al centro del tunnel (X=0) che marca la "lane" Y/Z
+      const dot = document.createElement('a-sphere');
+      dot.setAttribute('position', `0 ${slot.y} ${slot.z}`);
+      dot.setAttribute('radius', used ? 0.09 : 0.045);
+      dot.setAttribute('color', used ? '#00ff00' : '#555');
+      dot.setAttribute('material', `opacity: ${used ? 0.95 : 0.35}; emissive: ${used ? '#003300' : '#000'}; emissiveIntensity: 0.5`);
+      container.appendChild(dot);
+
+      // Solo per gli occupati: linea che mostra la traiettoria su asse X
+      if (used) {
+        const line = document.createElement('a-entity');
+        line.setAttribute('line', `start: 14 ${slot.y} ${slot.z}; end: -14 ${slot.y} ${slot.z}; color: #00ff0066; opacity: 0.4`);
+        container.appendChild(line);
+      }
+    });
+
+    // Preset views
+    const rig = document.getElementById('rig');
+    const views = {
+      spectator: { pos: '0 1.6 0.5', rot: '0 0 0' },
+      top:       { pos: '0 18 -4.75', rot: '-90 0 0' },
+      side:      { pos: '0 2 8', rot: '0 0 0' },
+      iso:       { pos: '18 6 6', rot: '-15 60 0' },
+      start:     { pos: '20 2 -4.75', rot: '0 90 0' }
+    };
+    function setView(name) {
+      const v = views[name];
+      if (!v) return;
+      rig.setAttribute('position', v.pos);
+      rig.setAttribute('rotation', v.rot);
+    }
+  </script>
+
+</body>
+</html>
