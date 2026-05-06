@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <title>Farfalle AR</title>
+    <script src="vendor/aframe-1.3.0.min.js"></script>
+    <script src="vendor/aframe-ar-3.4.8.js"></script>
+    <script src="vendor/aframe-extras-6.1.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <link rel="stylesheet" href="css/style.css">
+  </head>
+
+  <body>
+
+    <div id="overlay">
+      <div id="status-msg">
+        <div class="logo-area">
+          <a href="/">
+            <img src="assets/icons/Logo Ondulkart_w.svg" alt="Ondulkart" class="logo-img">
+          </a>
+        </div>
+
+        <div class="middle-content">
+          <h1 class="main-title">THE LINK</h1> 
+          <p class="sub-title"><em>Where Technology meets the Soul of Nature</em></p> 
+        </div>
+
+        <div class="button-area">
+          <button class="btn-start" onclick="startExperience()">START</button>
+        </div>
+      </div>
+
+      <div id="calibration-msg" class="hidden">
+        <div class="icon-frame"></div>
+        <h2>POSITION YOUR DEVICE</h2>
+        <p>Keep your phone vertically in front of you</p>
+      </div>
+    </div>
+
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="colorManagement: true;" xr-mode-ui="enabled: false">
+      <a-assets>
+        <a-asset-item id="butterflyModel" src="assets/models/animated_butterfly_fucsia.glb"></a-asset-item>
+      </a-assets>
+
+      <a-camera id="main-camera" look-controls></a-camera>
+      <a-entity id="swarm"></a-entity>
+
+      <a-entity light="type: ambient; intensity: 1.2;"></a-entity>
+      <a-entity light="type: directional; intensity: 1; position: 1 1 1"></a-entity>
+    </a-scene>
+
+    <script src="js/script.js"></script>
+  </body>
+</html>
