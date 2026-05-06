@@ -85,21 +85,24 @@ function proceed() {
 function createSwarm(swarmContainer) {
   const numButterflies = 90;
 
+  // Tunnel extends along -Z (depth, away from user at entrance).
+  // Width spreads on X, height on Y. cameraHeight offsets Y so ground = real floor.
   const tunnelLength = 28;
-  const tunnelWidth = 7.5;
+  const tunnelWidth  = 7.5;
   const tunnelHeight = 3.3;
   const groundOffset = 0.5;
-  const povDistance = 1;
+  const cameraHeight = 1.6; // approximate phone height at start (adjusts Y to real floor)
 
-  const rows = 12;
-  const cols = 13;
+  const cols = 13; // X divisions (width)
+  const rows = 12; // Y divisions (height)
 
+  // Grid fills the XY cross-section of the tunnel entrance
   let grid = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       grid.push({
-        y: (r / (rows - 1)) * tunnelHeight + groundOffset,
-        z: -((c / (cols - 1)) * tunnelWidth + povDistance)
+        x: (c / (cols - 1)) * tunnelWidth - tunnelWidth / 2,
+        y: (r / (rows - 1)) * tunnelHeight + groundOffset - cameraHeight,
       });
     }
   }
@@ -115,19 +118,24 @@ function createSwarm(swarmContainer) {
     butterfly.setAttribute('butterfly-color', 'color: #ce0058');
 
     const resetButterfly = (el, isFirstSpawn = false) => {
-      const startX = tunnelLength / 2;
-      const endX = -(tunnelLength / 2);
-      const currentSpawnX = isFirstSpawn ? (Math.random() * tunnelLength - startX) : startX;
+      const endZ = -tunnelLength;
       const moveDuration = Math.random() * 4000 + 10000;
-      const distanceRatio = isFirstSpawn ? Math.abs(currentSpawnX - endX) / tunnelLength : 1;
-      const currentDuration = moveDuration * distanceRatio;
+      let startZ, currentDuration;
 
-      el.setAttribute('position', `${currentSpawnX} ${slot.y} ${slot.z}`);
+      if (isFirstSpawn) {
+        startZ = -(Math.random() * tunnelLength); // scatter throughout tunnel on first spawn
+        currentDuration = moveDuration * (Math.abs(startZ - endZ) / tunnelLength);
+      } else {
+        startZ = 0; // respawn at entrance
+        currentDuration = moveDuration;
+      }
+
+      el.setAttribute('position', `${slot.x} ${slot.y} ${startZ}`);
       el.setAttribute('rotation', '0 -90 0');
 
       el.setAttribute('animation__move', {
         property: 'position',
-        to: `${endX} ${slot.y} ${slot.z}`,
+        to: `${slot.x} ${slot.y} ${endZ}`,
         dur: currentDuration,
         easing: 'linear'
       });
@@ -154,20 +162,23 @@ function createSwarm(swarmContainer) {
 // ──  Debug wireframe overlay (?debug in URL)  ──────────────────────
 function addDebugWireframe(scene) {
   const tunnelLength = 28;
-  const tunnelWidth = 7.5;
+  const tunnelWidth  = 7.5;
   const tunnelHeight = 3.3;
   const groundOffset = 0.5;
-  const povDistance = 1;
-  const rows = 12, cols = 13;
+  const cameraHeight = 1.6;
+  const cols = 13, rows = 12;
+
+  const centerY = groundOffset + tunnelHeight / 2 - cameraHeight; // 0.55
+  const centerZ = -tunnelLength / 2;                               // -14
 
   const group = document.createElement('a-entity');
   group.id = 'debug-wireframe';
 
   const box = document.createElement('a-box');
-  box.setAttribute('position', `0 ${(groundOffset + tunnelHeight + groundOffset) / 2} ${-(povDistance + tunnelWidth / 2)}`);
-  box.setAttribute('width', tunnelLength);
-  box.setAttribute('height', tunnelHeight);
-  box.setAttribute('depth', tunnelWidth);
+  box.setAttribute('position', `0 ${centerY} ${centerZ}`);
+  box.setAttribute('width', tunnelWidth);   // X
+  box.setAttribute('height', tunnelHeight); // Y
+  box.setAttribute('depth', tunnelLength);  // Z
   box.setAttribute('material', 'color: #fe5000; wireframe: true; opacity: 1');
   group.appendChild(box);
 
@@ -179,9 +190,10 @@ function addDebugWireframe(scene) {
     group.appendChild(line);
   });
 
+  // Green cone = tunnel entrance (z=0), orange cone = far end (z=-28)
   const start = document.createElement('a-cone');
-  start.setAttribute('position', `14 2 -4.75`);
-  start.setAttribute('rotation', '0 0 -90');
+  start.setAttribute('position', `0 ${centerY} 0`);
+  start.setAttribute('rotation', '90 0 0');
   start.setAttribute('radius-bottom', '0.3');
   start.setAttribute('radius-top', '0');
   start.setAttribute('height', '0.8');
@@ -189,20 +201,21 @@ function addDebugWireframe(scene) {
   group.appendChild(start);
 
   const end = document.createElement('a-cone');
-  end.setAttribute('position', `-14 2 -4.75`);
-  end.setAttribute('rotation', '0 0 90');
+  end.setAttribute('position', `0 ${centerY} ${-tunnelLength}`);
+  end.setAttribute('rotation', '-90 0 0');
   end.setAttribute('radius-bottom', '0.3');
   end.setAttribute('radius-top', '0');
   end.setAttribute('height', '0.8');
   end.setAttribute('color', '#ff5500');
   group.appendChild(end);
 
+  // Grid dots on XY cross-section at entrance (z=0)
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const y = (r / (rows - 1)) * tunnelHeight + groundOffset;
-      const z = -((c / (cols - 1)) * tunnelWidth + povDistance);
+      const x = (c / (cols - 1)) * tunnelWidth - tunnelWidth / 2;
+      const y = (r / (rows - 1)) * tunnelHeight + groundOffset - cameraHeight;
       const dot = document.createElement('a-sphere');
-      dot.setAttribute('position', `0 ${y} ${z}`);
+      dot.setAttribute('position', `${x} ${y} 0`);
       dot.setAttribute('radius', '0.05');
       dot.setAttribute('color', '#888');
       dot.setAttribute('material', 'opacity: 0.5; emissive: #444; emissiveIntensity: 0.5');
@@ -213,5 +226,5 @@ function addDebugWireframe(scene) {
   scene.appendChild(group);
 
   const hud = document.getElementById('debug-hud');
-  if (hud) hud.innerHTML = '<b>DEBUG ON</b> · tunnel 28×7.5×3.3 · X rosso · Y verde · -Z blu (8thwall SLAM)';
+  if (hud) hud.innerHTML = '<b>DEBUG ON</b> · tunnel 28×7.5×3.3 · +X rosso · +Y verde · -Z blu=tunnel';
 }
