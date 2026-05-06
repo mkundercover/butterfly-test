@@ -21,6 +21,7 @@ AFRAME.registerComponent('butterfly-color', {
 // 2. Variabili di Stato
 let sensorsActive = false;
 let experienceActivated = false;
+const DEBUG = new URLSearchParams(location.search).has('debug');
 
 // 3. Gestione Permessi
 function startExperience() {
@@ -54,8 +55,9 @@ window.addEventListener('load', () => {
       // Attivazione quando il telefono è verticale (pitch tra -25° e 25°)
       if (rotation && rotation.x > -25 && rotation.x < 25) {
         experienceActivated = true;
-        overlay.classList.add('hidden'); 
+        overlay.classList.add('hidden');
         createSwarm(swarm);
+        if (DEBUG) addDebugWireframe(document.querySelector('a-scene'));
       }
     }
   }, 200);
@@ -140,4 +142,76 @@ function createSwarm(swarmContainer) {
     // Passiamo true per distribuire le farfalle ovunque all'avvio
     resetButterfly(butterfly, true);
   }
+}
+
+// 6. Debug wireframe overlay (?debug nell'URL)
+function addDebugWireframe(scene) {
+  const tunnelLength = 28;
+  const tunnelWidth = 7.5;
+  const tunnelHeight = 3.3;
+  const groundOffset = 0.5;
+  const povDistance = 1;
+  const rows = 12, cols = 13;
+
+  const group = document.createElement('a-entity');
+  group.id = 'debug-wireframe';
+
+  // Box wireframe del tunnel
+  const box = document.createElement('a-box');
+  box.setAttribute('position', `0 ${(groundOffset + tunnelHeight + groundOffset) / 2} ${-(povDistance + tunnelWidth / 2)}`);
+  box.setAttribute('width', tunnelLength);
+  box.setAttribute('height', tunnelHeight);
+  box.setAttribute('depth', tunnelWidth);
+  box.setAttribute('material', 'color: #fe5000; wireframe: true; opacity: 1');
+  group.appendChild(box);
+
+  // Assi all'origine (X rosso, Y verde, -Z blu)
+  ['x:1 0 0:#ff0000', 'y:0 1 0:#00ff00', 'z:0 0 -1:#0066ff'].forEach(s => {
+    const [, dir, color] = s.split(':');
+    const [dx, dy, dz] = dir.split(' ').map(Number);
+    const line = document.createElement('a-entity');
+    line.setAttribute('line', `start: 0 0 0; end: ${dx * 2} ${dy * 2} ${dz * 2}; color: ${color}`);
+    group.appendChild(line);
+  });
+
+  // Marker START e END
+  const start = document.createElement('a-cone');
+  start.setAttribute('position', `14 2 -4.75`);
+  start.setAttribute('rotation', '0 0 -90');
+  start.setAttribute('radius-bottom', '0.3');
+  start.setAttribute('radius-top', '0');
+  start.setAttribute('height', '0.8');
+  start.setAttribute('color', '#00ff00');
+  group.appendChild(start);
+
+  const end = document.createElement('a-cone');
+  end.setAttribute('position', `-14 2 -4.75`);
+  end.setAttribute('rotation', '0 0 90');
+  end.setAttribute('radius-bottom', '0.3');
+  end.setAttribute('radius-top', '0');
+  end.setAttribute('height', '0.8');
+  end.setAttribute('color', '#ff5500');
+  group.appendChild(end);
+
+  // Tutti i 156 slot griglia (sferette)
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const y = (r / (rows - 1)) * tunnelHeight + groundOffset;
+      const z = -((c / (cols - 1)) * tunnelWidth + povDistance);
+      const dot = document.createElement('a-sphere');
+      dot.setAttribute('position', `0 ${y} ${z}`);
+      dot.setAttribute('radius', '0.05');
+      dot.setAttribute('color', '#888');
+      dot.setAttribute('material', 'opacity: 0.5; emissive: #444; emissiveIntensity: 0.5');
+      group.appendChild(dot);
+    }
+  }
+
+  scene.appendChild(group);
+
+  // HUD on-screen
+  const hud = document.createElement('div');
+  hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.8);color:#fe5000;padding:8px 12px;font:12px ui-monospace,monospace;border:1px solid #fe5000;border-radius:4px;pointer-events:none';
+  hud.innerHTML = '<b>DEBUG</b> tunnel 28×7.5×3.3 · X rosso · Y verde · -Z blu';
+  document.body.appendChild(hud);
 }
