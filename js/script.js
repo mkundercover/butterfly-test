@@ -23,6 +23,17 @@ let sensorsActive = false;
 let experienceActivated = false;
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
+// HUD debug visibile SUBITO al load (così sai che ?debug è attivo prima della calibrazione)
+if (DEBUG) {
+  window.addEventListener('DOMContentLoaded', () => {
+    const hud = document.createElement('div');
+    hud.id = 'debug-hud';
+    hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#fe5000;padding:8px 12px;font:12px ui-monospace,monospace;border:1px solid #fe5000;border-radius:4px;pointer-events:none';
+    hud.innerHTML = '<b>DEBUG ON</b> · attendi START + calibrazione';
+    document.body.appendChild(hud);
+  });
+}
+
 // 3. Gestione Permessi
 function startExperience() {
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -209,9 +220,7 @@ function addDebugWireframe(scene) {
 
   scene.appendChild(group);
 
-  // HUD on-screen
-  const hud = document.createElement('div');
-  hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.8);color:#fe5000;padding:8px 12px;font:12px ui-monospace,monospace;border:1px solid #fe5000;border-radius:4px;pointer-events:none';
-  hud.innerHTML = '<b>DEBUG</b> tunnel 28×7.5×3.3 · X rosso · Y verde · -Z blu';
-  document.body.appendChild(hud);
+  // Aggiorna HUD esistente
+  const hud = document.getElementById('debug-hud');
+  if (hud) hud.innerHTML = '<b>DEBUG ON</b> · tunnel 28×7.5×3.3 · X rosso · Y verde · -Z blu';
 }
