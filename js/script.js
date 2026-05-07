@@ -104,12 +104,19 @@ function proceed() {
 function realignSwarm(updateHud) {
   const swarm  = document.querySelector('#swarm');
   const camera = document.getElementById('main-camera');
+  const pos    = camera && camera.getAttribute('position');
   const rot    = camera && camera.getAttribute('rotation');
+  const x      = pos ? pos.x : 0;
+  const z      = pos ? pos.z : 0;
   const yaw    = rot ? rot.y : 0;
+  // Anchor swarm at user's current XZ position on the ground (Y=0).
+  // Without this the swarm stays at the SLAM origin (0,0,0) and appears
+  // tiny/distant if the user walked away from the initialisation point.
+  swarm.setAttribute('position', `${x} 0 ${z}`);
   swarm.setAttribute('rotation', `0 ${yaw} 0`);
   if (updateHud) {
     const hud = document.getElementById('debug-hud');
-    if (hud) hud.innerHTML = `<b>DEBUG</b> · riallineato · yaw=${yaw.toFixed(1)}°`;
+    if (hud) hud.innerHTML = `<b>DEBUG</b> · pos=(${x.toFixed(1)}, ${z.toFixed(1)}) yaw=${yaw.toFixed(1)}°`;
   }
 }
 
