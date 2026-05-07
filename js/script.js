@@ -63,13 +63,15 @@ function startExperience() {
 
 function proceed() {
   document.getElementById('status-msg').classList.add('hidden');
-  document.getElementById('calibration-msg').classList.remove('hidden');
+  const calibMsg = document.getElementById('calibration-msg');
+  calibMsg.classList.remove('hidden');
 
   const scene = document.querySelector('a-scene');
 
   const activate = () => {
     if (experienceActivated) return;
     experienceActivated = true;
+    window.removeEventListener('deviceorientation', tiltHandler);
     document.getElementById('overlay').classList.add('hidden');
     realignSwarm(false);
     const swarm = document.querySelector('#swarm');
@@ -77,16 +79,21 @@ function proceed() {
     createSwarm(swarm);
   };
 
-  // realityready may already have fired before START was clicked
-  if (realityReadyFired) {
-    activate();
-    return;
-  }
+  // Trigger 1: tap anywhere on the calibration screen
+  calibMsg.addEventListener('click', activate, { once: true });
 
+  // Trigger 2: tilt phone to vertical (beta > 65°) — matches old AR.js "lift" gesture
+  const tiltHandler = (e) => {
+    if (e.beta !== null && Math.abs(e.beta) > 65) activate();
+  };
+  window.addEventListener('deviceorientation', tiltHandler);
+
+  // Trigger 3: realityready may already have fired before START was clicked
+  if (realityReadyFired) { activate(); return; }
   scene.addEventListener('realityready', activate);
 
-  // Fallback: if realityready doesn't fire within 8s, activate anyway
-  setTimeout(activate, 8000);
+  // Trigger 4: fallback after 4s
+  setTimeout(activate, 4000);
 }
 
 // ──  Alignment  ────────────────────────────────────────────────────
