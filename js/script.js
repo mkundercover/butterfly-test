@@ -39,6 +39,12 @@ if (DEBUG) {
     hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#fe5000;padding:8px 12px;font:12px ui-monospace,monospace;border:1px solid #fe5000;border-radius:4px;pointer-events:none';
     hud.innerHTML = '<b>DEBUG ON</b> · attendi START';
     document.body.appendChild(hud);
+
+    const btn = document.createElement('button');
+    btn.textContent = '↻ RIALLINEA';
+    btn.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:9999;background:#fe5000;color:#fff;border:none;padding:14px 28px;font:bold 16px ui-monospace,monospace;border-radius:8px;cursor:pointer';
+    btn.onclick = () => realignSwarm(true);
+    document.body.appendChild(btn);
   });
 }
 
@@ -65,8 +71,10 @@ function proceed() {
     if (experienceActivated) return;
     experienceActivated = true;
     document.getElementById('overlay').classList.add('hidden');
-    if (DEBUG) addDebugWireframe(scene);
-    createSwarm(document.querySelector('#swarm'));
+    realignSwarm(false);
+    const swarm = document.querySelector('#swarm');
+    if (DEBUG) addDebugWireframe(swarm);
+    createSwarm(swarm);
   };
 
   // realityready may already have fired before START was clicked
@@ -81,7 +89,24 @@ function proceed() {
   setTimeout(activate, 8000);
 }
 
-// ──  Swarm logic (unchanged from original)  ────────────────────────
+// ──  Alignment  ────────────────────────────────────────────────────
+// Rotates the swarm container so its X axis (butterfly flight path)
+// aligns with the camera's current left-right direction. This maps the
+// 18m flight axis to the physical terrace length regardless of the
+// SLAM world orientation at initialization.
+function realignSwarm(updateHud) {
+  const swarm  = document.querySelector('#swarm');
+  const camera = document.getElementById('main-camera');
+  const rot    = camera && camera.getAttribute('rotation');
+  const yaw    = rot ? rot.y : 0;
+  swarm.setAttribute('rotation', `0 ${yaw} 0`);
+  if (updateHud) {
+    const hud = document.getElementById('debug-hud');
+    if (hud) hud.innerHTML = `<b>DEBUG</b> · riallineato · yaw=${yaw.toFixed(1)}°`;
+  }
+}
+
+// ──  Swarm logic  ──────────────────────────────────────────────────
 function createSwarm(swarmContainer) {
   const numButterflies = 90;
 
@@ -145,7 +170,7 @@ function createSwarm(swarmContainer) {
 }
 
 // ──  Debug wireframe overlay (?debug in URL)  ──────────────────────
-function addDebugWireframe(scene) {
+function addDebugWireframe(swarmContainer) {
   // Mirror the exact constants from createSwarm
   const tunnelLength = 18;   // X: ±9m
   const zNear        = 0.5;
@@ -220,7 +245,7 @@ function addDebugWireframe(scene) {
     group.appendChild(dot);
   }
 
-  scene.appendChild(group);
+  swarmContainer.appendChild(group);
 
   const hud = document.getElementById('debug-hud');
   if (hud) hud.innerHTML = `<b>DEBUG</b> · box 18×4.30m · farfalle ${heightBase}m · Z ${zNear}–${zFar}m`;
