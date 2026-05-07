@@ -104,19 +104,33 @@ function proceed() {
 function realignSwarm(updateHud) {
   const swarm  = document.querySelector('#swarm');
   const camera = document.getElementById('main-camera');
-  const pos    = camera && camera.getAttribute('position');
-  const rot    = camera && camera.getAttribute('rotation');
-  const x      = pos ? pos.x : 0;
-  const z      = pos ? pos.z : 0;
-  const yaw    = rot ? rot.y : 0;
-  // Anchor swarm at user's current XZ position on the ground (Y=0).
-  // Without this the swarm stays at the SLAM origin (0,0,0) and appears
-  // tiny/distant if the user walked away from the initialisation point.
-  swarm.setAttribute('position', `${x} 0 ${z}`);
-  swarm.setAttribute('rotation', `0 ${yaw} 0`);
+  if (!camera || !swarm) return;
+
+  const camObj = camera.object3D;
+
+  // Extract true horizontal yaw via quaternion math.
+  // camera.getAttribute('rotation').y is unreliable when the phone is
+  // tilted (held up for AR viewing) — Euler decomposition mixes pitch
+  // and yaw near 90° tilt, causing the box to appear diagonal/rotated.
+  const fwd = new THREE.Vector3(0, 0, -1)
+    .applyQuaternion(camObj.getWorldQuaternion(new THREE.Quaternion()));
+  fwd.y = 0;
+  if (fwd.lengthSq() < 0.001) return; // phone vertical pointing up, skip
+  fwd.normalize();
+  // atan2(fwd.x, -fwd.z) gives the A-Frame Y-rotation that matches the
+  // camera's horizontal heading regardless of phone tilt angle.
+  const yawDeg = THREE.MathUtils.radToDeg(Math.atan2(fwd.x, -fwd.z));
+
+  // Anchor swarm at camera's current world XZ, Y=0 (ground).
+  const worldPos = new THREE.Vector3();
+  camObj.getWorldPosition(worldPos);
+  swarm.setAttribute('position', `${worldPos.x} 0 ${worldPos.z}`);
+  swarm.setAttribute('rotation', `0 ${yawDeg} 0`);
+
   if (updateHud) {
     const hud = document.getElementById('debug-hud');
-    if (hud) hud.innerHTML = `<b>DEBUG</b> · pos=(${x.toFixed(1)}, ${z.toFixed(1)}) yaw=${yaw.toFixed(1)}°`;
+    if (hud) hud.innerHTML =
+      `<b>DEBUG</b> · pos=(${worldPos.x.toFixed(1)},${worldPos.z.toFixed(1)}) yaw=${yawDeg.toFixed(1)}°`;
   }
 }
 
@@ -127,13 +141,13 @@ function createSwarm(swarmContainer) {
   // Physical space: 18m × 4.30m terrace.
   // User stands at QR code — centre of the 18m edge, outside the terrace.
   // Butterflies fill the rectangle in front: ±9m on X, 0.5m–4m on Z.
-  const tunnelLength = 18;
-  const zNear        = 0.5;  // 0.5m from user (just inside the terrace edge)
-  const zFar         = 4.0;  // 4m in front (terrace is 4.30m deep, 0.3m margin)
+  const tunnelLength = 22;   // 22m: overflows 17.40m terrace by ~2m each side
+  const zNear        = 0.0;  // start right at user's position
+  const zFar         = 5.0;  // 5m in front: overflows 4.30m terrace
   const heightBase   = 2.5;  // metres above ground
   const heightJitter = 0.5;  // ±0.5m natural variation
 
-  const numZSlots = 10; // depth lanes across 3.5m
+  const numZSlots = 10; // depth lanes across 5m
 
   const zSlots = Array.from({length: numZSlots}, (_, c) =>
     -(zNear + (c / (numZSlots - 1)) * (zFar - zNear))
@@ -186,9 +200,9 @@ function createSwarm(swarmContainer) {
 // ──  Debug wireframe overlay (?debug in URL)  ──────────────────────
 function addDebugWireframe(swarmContainer) {
   // Mirror the exact constants from createSwarm
-  const tunnelLength = 18;   // X: ±9m
-  const zNear        = 0.5;
-  const zFar         = 4.0;  // Z: 0.5m–4m
+  const tunnelLength = 22;   // X: ±11m
+  const zNear        = 0.0;
+  const zFar         = 5.0;  // Z: 0–5m
   const heightBase   = 2.5;
   const heightJitter = 0.5;
   const numZSlots    = 10;
