@@ -102,27 +102,28 @@ function spawnButterflies() {
     swarm.setAttribute('position', '0 0 0');
 
     // Griglia tunnel reale da wireframe.html — dimensioni invariate
-    const tunnelW = 7.5, tunnelH = 3.3, groundY = 0.5, povZ = 1;
-    const rows = 12, cols = 13;
+    // Tunnel reale: Z -2m → -8m (evita Z=-1m dove scala 0.3 riempirebbe lo schermo)
+    // iPhone portrait FOV orizzontale ~50° → a Z=-4m vede ±1.9m di larghezza
+    const tunnelW = 6.0, tunnelH = 3.3, groundY = 0.5, minZ = 2.0;
+    const rows = 8, cols = 10;
     const slots = [];
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             slots.push({
-                y: (r / (rows - 1)) * tunnelH + groundY,          // 0.5 → 3.8m
-                z: -((c / (cols - 1)) * tunnelW + povZ)            // -1 → -8.5m
+                y: (r / (rows - 1)) * tunnelH + groundY,
+                z: -((c / (cols - 1)) * tunnelW + minZ)   // -2m → -8m
             });
         }
     }
     slots.sort(() => Math.random() - 0.5);
 
     slots.slice(0, 20).forEach(slot => {
-        const startX = -14 + Math.random() * 28;   // distribuite lungo i 28m reali
+        const startX = -14 + Math.random() * 28;
 
         const b = document.createElement('a-entity');
         b.setAttribute('gltf-model', '#butterflyModel');
         b.setAttribute('animation-mixer', 'clip: *; loop: repeat; timeScale: 1');
-        // scala 0.6: a 4m di distanza media appaiono ~10° su schermo (chiaramente visibili)
-        b.setAttribute('scale', '0.6 0.6 0.6');
+        b.setAttribute('scale', '0.3 0.3 0.3');
         b.setAttribute('rotation', `0 ${90 + Math.round((Math.random() - 0.5) * 30)} 0`);
         b.setAttribute('position', `${startX.toFixed(2)} ${slot.y.toFixed(2)} ${slot.z.toFixed(2)}`);
         swarm.appendChild(b);
@@ -130,7 +131,7 @@ function spawnButterflies() {
         flyingButterflies.push({
             el:    b,
             x:     startX,
-            speed: 1.5 + Math.random() * 2   // 1.5–3.5 m/s
+            speed: 1 + Math.random() * 2   // 1–3 m/s
         });
     });
 }
