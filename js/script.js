@@ -83,9 +83,15 @@ function proceed() {
     
     setTimeout(() => {
       document.getElementById('overlay').classList.add('hidden');
-      // Anchor handles placement now, just populate the swarm
-      createSwarm(document.querySelector('#swarm'));
-      console.log('AR Tunnel active');
+      const swarm = document.querySelector('#swarm');
+      
+      // Ensure the anchor is active before populating
+      swarm.addEventListener('xranchoradded', () => {
+        createSwarm(swarm);
+        console.log('Swarm populated on anchor');
+      }, {once: true});
+      
+      console.log('Waiting for anchor...');
     }, 500);
   };
   // Tap attiva sempre (anche se non è verde, per non bloccare l'utente)
