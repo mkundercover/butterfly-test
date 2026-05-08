@@ -15,7 +15,7 @@ function startFlightLoop() {
         for (let i = 0; i < flyingButterflies.length; i++) {
             const b = flyingButterflies[i];
             b.x -= b.speed * dt;
-            if (b.x < -14) b.x = 14;
+            if (b.x < -5) b.x = 5;   // range ±5m calibrato per FOV telefono
             if (b.el.object3D) b.el.object3D.position.x = b.x;
         }
         requestAnimationFrame(loop);
@@ -97,47 +97,34 @@ function waitForScene() {
     return new Promise(resolve => scene.addEventListener('loaded', resolve, { once: true }));
 }
 
-// Dimensioni tunnel da wireframe.html
-const TUNNEL = {
-    width: 7.5, height: 3.3, groundY: 0.5, povZ: 1, rows: 12, cols: 13
-};
-
 function spawnButterflies() {
     const swarm = document.getElementById('swarm');
     swarm.setAttribute('position', '0 0 0');
 
-    // Griglia slot Y/Z identica a wireframe.html
-    const slots = [];
-    for (let r = 0; r < TUNNEL.rows; r++) {
-        for (let c = 0; c < TUNNEL.cols; c++) {
-            slots.push({
-                y: (r / (TUNNEL.rows - 1)) * TUNNEL.height + TUNNEL.groundY,
-                z: -((c / (TUNNEL.cols - 1)) * TUNNEL.width + TUNNEL.povZ)
-            });
-        }
-    }
-    slots.sort(() => Math.random() - 0.5);
+    // 20 farfalle distribuite in uno spazio visibile da telefono:
+    //   Z: -0.5 → -3m   (vicine, ben visibili a schermo)
+    //   Y: 0.3  → 2.2m  (da terra ad altezza testa)
+    //   X: ±5m  (entrano/escono dal bordo schermo)
+    //   scale: 0.5  (≈ 3× più grandi della versione precedente)
+    for (let i = 0; i < 20; i++) {
+        const z      = -(0.5 + Math.random() * 2.5);   // -0.5 → -3m
+        const y      =   0.3 + Math.random() * 1.9;    //  0.3 → 2.2m
+        const startX =  -5   + Math.random() * 10;     // -5   → +5m
 
-    slots.slice(0, 15).forEach(slot => {
         const b = document.createElement('a-entity');
         b.setAttribute('gltf-model', '#butterflyModel');
         b.setAttribute('animation-mixer', 'clip: *; loop: repeat; timeScale: 1');
-        b.setAttribute('scale', '0.2 0.15 0.2');
+        b.setAttribute('scale', '0.5 0.5 0.5');
         b.setAttribute('rotation', `0 ${90 + Math.round((Math.random() - 0.5) * 30)} 0`);
-
-        // X iniziale casuale: farfalle già distribuite lungo tutto il tunnel
-        const startX = -14 + Math.random() * 28;
-        b.setAttribute('position', `${startX.toFixed(2)} ${slot.y.toFixed(2)} ${slot.z.toFixed(2)}`);
-
+        b.setAttribute('position', `${startX.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)}`);
         swarm.appendChild(b);
 
-        // Registra nel loop di volo nativo
         flyingButterflies.push({
             el:    b,
             x:     startX,
-            speed: 2 + Math.random() * 2   // 2–4 m/s
+            speed: 0.8 + Math.random() * 1.2   // 0.8–2 m/s (più lente = più visibili)
         });
-    });
+    }
 }
 
 function showARError(err, btn) {
