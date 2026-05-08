@@ -88,11 +88,17 @@ function proceed() {
       const swarm = document.querySelector('#swarm');
       swarm.setAttribute('position', position);
       swarm.setAttribute('rotation', rotation);
+      
+      // Lock the matrix to prevent drift
+      swarm.object3D.matrixAutoUpdate = false;
+      swarm.object3D.updateMatrix();
     } else {
-      // Fallback: place 1.5m in front of camera
+      // Fallback
       const swarm = document.querySelector('#swarm');
       swarm.setAttribute('position', '0 0 -1.5');
       swarm.setAttribute('rotation', '0 0 0');
+      swarm.object3D.matrixAutoUpdate = false;
+      swarm.object3D.updateMatrix();
     }
 
     document.getElementById('overlay').classList.add('hidden');
