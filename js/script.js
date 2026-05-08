@@ -35,46 +35,35 @@ window.addEventListener('DOMContentLoaded', () => {
       if (event.detail.status === 'NORMAL') {
         trackingIsNormal = true;
         const statusIcon = document.querySelector('.scan-animation');
-        if (statusIcon) statusIcon.style.background = '#00ff00'; // Green = ready
+        if (statusIcon) statusIcon.style.background = '#00ff00'; // Green = calibrated
       } else {
         trackingIsNormal = false;
         const statusIcon = document.querySelector('.scan-animation');
-        if (statusIcon) statusIcon.style.background = '#fe5000'; // Orange = searching
+        if (statusIcon) statusIcon.style.background = '#fe5000'; // Orange = calibrating
       }
     });
   }
 });
 
-// HUD debug visibile SUBITO al load
+// HUD debug
 if (DEBUG) {
   window.addEventListener('DOMContentLoaded', () => {
     const hud = document.createElement('div');
     hud.id = 'debug-hud';
-    hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#fe5000;padding:8px 12px;font:12px ui-monospace,monospace;border:1px solid #fe5000;border-radius:4px;pointer-events:none';
-    hud.innerHTML = '<b>DEBUG ON</b> · attendi START';
+    hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#00ff00;padding:8px 12px;font:12px monospace;border:1px solid #00ff00;border-radius:4px;pointer-events:none';
+    hud.innerHTML = '<b>DEBUG V8</b> · in attesa';
     document.body.appendChild(hud);
-
-    const btn = document.createElement('button');
-    btn.textContent = '↻ RIALLINEA';
-    btn.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:9999;background:#fe5000;color:#fff;border:none;padding:14px 28px;font:bold 16px ui-monospace,monospace;border-radius:8px;cursor:pointer';
-    btn.onclick = () => realignSwarm(true);
-    document.body.appendChild(btn);
   });
 }
 
 // ──  Start flow  ───────────────────────────────────────────────────
 function startExperience() {
-  console.log('Start Experience clicked');
-  // iOS 13+ requires explicit permission request for DeviceOrientation
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission().then(response => {
       if (response === 'granted') { proceed(); }
-      else { alert('Permission denied. AR needs motion sensors.'); proceed(); }
-    }).catch(err => {
-      console.error(err);
-      proceed(); // fallback anyway
-    });
+      else { proceed(); }
+    }).catch(() => proceed());
   } else {
     proceed();
   }
@@ -88,90 +77,70 @@ function proceed() {
   const activate = (forced = false) => {
     if (experienceActivated) return;
     
-    // Only wait for tracking if not forced (forced = tap on screen)
-    if (!forced && !trackingIsNormal && !realityReadyFired) {
-      console.log('Waiting for stable tracking...');
+    // We strictly wait for NORMAL tracking to ensure scale (meters) is correct
+    if (!forced && !trackingIsNormal) {
+      console.log('Waiting for NORMAL tracking status...');
       return;
     }
 
     experienceActivated = true;
     window.removeEventListener('deviceorientation', tiltHandler);
     
-    // Change UI to "Locking..." state
-    calibMsg.innerHTML = '<h2>SINCRO IN CORSO...</h2><p>Resta immobile un istante</p>';
+    calibMsg.innerHTML = '<h2>ANCORAGGIO...</h2><p>Resta immobile, sto fissando il tunnel a terra</p>';
     
-    // Wait for the sensors to stabilize
+    // 1. RECENTER: This is the magic. It makes your current position 0,0,0 and your yaw 0.
+    if (window.XR8) {
+      window.XR8.XrController.recenter();
+    }
+
+    // 2. WAIT: Let the SLAM engine settle after recenter
     setTimeout(() => {
       document.getElementById('overlay').classList.add('hidden');
-      realignSwarm(false);
+      
       const swarm = document.querySelector('#swarm');
+      
+      // 3. POSITION: Since we recentered, 0 0 0 is exactly where you are standing.
+      swarm.setAttribute('position', '0 0 0');
+      swarm.setAttribute('rotation', '0 0 0');
+      
       if (DEBUG) addDebugWireframe(swarm);
       createSwarm(swarm);
-    }, 800);
+      
+      console.log('AR World Anchored at 0,0,0');
+    }, 1000);
   };
 
-  // Trigger 1: tap anywhere (FORCES activation)
+  // Tap forces activation even if tracking isn't "perfect"
   calibMsg.addEventListener('click', () => activate(true));
 
-  // Trigger 2: tilt phone to vertical (beta > 70)
+  // Vertical tilt activates ONLY if tracking is stable (for best quality)
   const tiltHandler = (e) => {
-    if (e.beta !== null && Math.abs(e.beta) > 70 && trackingIsNormal) activate(false);
+    if (e.beta !== null && Math.abs(e.beta) > 75 && trackingIsNormal) activate(false);
   };
   window.addEventListener('deviceorientation', tiltHandler);
 
-  // Trigger 3: automatic fallback if tracking is solid
+  // Auto-activate if perfect tracking is found and user is already vertical
   const checkReady = setInterval(() => {
-    if (trackingIsNormal && realityReadyFired && !experienceActivated) {
-      // We don't auto-activate to allow user to be in position
+    if (trackingIsNormal && experienceActivated === false) {
+      // We could auto-activate here, but better let the user decide with tilt or tap
     }
   }, 500);
   
-  // Hard fallback after 15s
-  setTimeout(() => { clearInterval(checkReady); activate(true); }, 15000);
-}
-
-// ──  Alignment  ────────────────────────────────────────────────────
-function realignSwarm(updateHud) {
-  const swarm   = document.querySelector('#swarm');
-  const sceneEl = document.querySelector('a-scene');
-  if (!swarm || !sceneEl) return;
-
-  const threeCam = sceneEl.camera;
-  if (!threeCam) return;
-  
-  threeCam.updateMatrixWorld(true);
-
-  const pos = new THREE.Vector3();
-  const q = new THREE.Quaternion();
-  const scale = new THREE.Vector3();
-  threeCam.matrixWorld.decompose(pos, q, scale);
-
-  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-  fwd.y = 0; 
-  fwd.normalize();
-
-  let yawDeg = THREE.MathUtils.radToDeg(Math.atan2(fwd.x, -fwd.z));
-
-  swarm.setAttribute('position', `${pos.x} 0 ${pos.z}`);
-  swarm.setAttribute('rotation', `0 ${yawDeg} 0`);
-  swarm.object3D.updateMatrixWorld(true);
-
-  const hud = document.getElementById('debug-hud');
-  if (hud) {
-    hud.innerHTML = `<b>v7-FIX</b> · pos=(${pos.x.toFixed(2)},${pos.z.toFixed(2)}) yaw=${yawDeg.toFixed(1)}°`;
-  }
+  setTimeout(() => { clearInterval(checkReady); activate(true); }, 20000);
 }
 
 // ──  Swarm logic  ──────────────────────────────────────────────────
 function createSwarm(swarmContainer) {
   const numButterflies = 90;
-  const tunnelLength = 22;
-  const zNear        = 0.0;
-  const zFar         = 5.0;
-  const heightBase   = 2.5;
-  const heightJitter = 0.5;
-  const numZSlots = 10;
+  
+  // MEASUREMENTS (Metres)
+  const tunnelLength = 22;   // 11m left, 11m right
+  const zNear        = 0.5;  // Starts 0.5m in front of you
+  const zFar         = 5.5;  // Ends 5.5m in front of you (5m deep)
+  const heightBase   = 2.2;  // Height of flight
+  const heightJitter = 0.6;  
 
+  const numZSlots = 10;
   const zSlots = Array.from({length: numZSlots}, (_, c) =>
     -(zNear + (c / (numZSlots - 1)) * (zFar - zNear))
   );
@@ -189,8 +158,10 @@ function createSwarm(swarmContainer) {
     const resetButterfly = (el, isFirstSpawn = false) => {
       const startX = tunnelLength / 2;
       const endX   = -(tunnelLength / 2);
+      // If first spawn, distribute them along the length
       const currentSpawnX = isFirstSpawn ? (Math.random() * tunnelLength - startX) : startX;
-      const moveDuration  = Math.random() * 4000 + 10000;
+      
+      const moveDuration  = Math.random() * 5000 + 12000;
       const distanceRatio = isFirstSpawn ? Math.abs(currentSpawnX - endX) / tunnelLength : 1;
       const currentDuration = moveDuration * distanceRatio;
 
@@ -209,8 +180,7 @@ function createSwarm(swarmContainer) {
         from: '#ce0058',
         to: '#fe5000',
         dur: currentDuration * 0.5,
-        easing: 'linear',
-        loop: false
+        easing: 'linear'
       });
     };
 
@@ -220,79 +190,34 @@ function createSwarm(swarmContainer) {
   }
 }
 
-// ──  Debug wireframe overlay (?debug in URL)  ──────────────────────
+// ──  Debug wireframe overlay  ──────────────────────────────────────
 function addDebugWireframe(swarmContainer) {
   const tunnelLength = 22;
-  const zNear        = 0.0;
-  const zFar         = 5.0;
-  const heightBase   = 2.5;
-  const heightJitter = 0.5;
-  const numZSlots    = 10;
-  const depthSpan = zFar - zNear;
-  const centerZ   = -(zNear + depthSpan / 2);
-  const centerY   = heightBase;
-  const boxHeight = heightJitter * 2;
+  const zNear = 0.5;
+  const zFar = 5.5;
+  const heightBase = 2.2;
+  const heightJitter = 0.6;
+  
+  const depth = zFar - zNear;
+  const centerZ = -(zNear + depth/2);
 
   const group = document.createElement('a-entity');
-  group.id = 'debug-wireframe';
-
-  const box = document.createElement('a-box');
-  box.setAttribute('position', `0 ${centerY} ${centerZ}`);
-  box.setAttribute('width',  tunnelLength);
-  box.setAttribute('height', boxHeight);
-  box.setAttribute('depth',  depthSpan);
-  box.setAttribute('material', 'color: #fe5000; wireframe: true; opacity: 1');
-  group.appendChild(box);
-
-  const anchor = document.createElement('a-sphere');
-  anchor.setAttribute('position', '0 0.1 0');
-  anchor.setAttribute('radius', '0.25');
-  anchor.setAttribute('color', '#ff0000');
-  anchor.setAttribute('material', 'emissive: #ff0000; emissiveIntensity: 1');
-  group.appendChild(anchor);
-
-  const floor = document.createElement('a-box');
-  floor.setAttribute('position', `0 0.01 ${centerZ}`);
-  floor.setAttribute('width',  tunnelLength);
-  floor.setAttribute('height', 0.02);
-  floor.setAttribute('depth',  depthSpan);
-  floor.setAttribute('material', 'color: #00aaff; wireframe: true; opacity: 1');
+  
+  // Floor guide (18x4.3 terrace reference)
+  const floor = document.createElement('a-plane');
+  floor.setAttribute('position', `0 0.05 ${centerZ}`);
+  floor.setAttribute('rotation', '-90 0 0');
+  floor.setAttribute('width', tunnelLength);
+  floor.setAttribute('height', depth);
+  floor.setAttribute('material', 'color: #00aaff; wireframe: true; opacity: 0.5');
   group.appendChild(floor);
 
-  ['x:1 0 0:#ff0000', 'y:0 1 0:#00ff00', 'z:0 0 -1:#0066ff'].forEach(s => {
-    const [, dir, color] = s.split(':');
-    const [dx, dy, dz] = dir.split(' ').map(Number);
-    const line = document.createElement('a-entity');
-    line.setAttribute('line', `start: 0 0 0; end: ${dx * 3} ${dy * 3} ${dz * 3}; color: ${color}`);
-    group.appendChild(line);
-  });
+  // User position marker
+  const marker = document.createElement('a-cylinder');
+  marker.setAttribute('radius', '0.3');
+  marker.setAttribute('height', '0.1');
+  marker.setAttribute('color', '#ff0000');
+  group.appendChild(marker);
 
-  const start = document.createElement('a-cone');
-  start.setAttribute('position', `${tunnelLength / 2} ${centerY} ${centerZ}`);
-  start.setAttribute('rotation', '0 0 -90');
-  start.setAttribute('radius-bottom', '0.3');
-  start.setAttribute('radius-top', '0');
-  start.setAttribute('height', '0.6');
-  start.setAttribute('color', '#00ff00');
-  group.appendChild(start);
-
-  const end = document.createElement('a-cone');
-  end.setAttribute('position', `${-(tunnelLength / 2)} ${centerY} ${centerZ}`);
-  end.setAttribute('rotation', '0 0 90');
-  end.setAttribute('radius-bottom', '0.3');
-  end.setAttribute('radius-top', '0');
-  end.setAttribute('height', '0.6');
-  end.setAttribute('color', '#ff5500');
-  group.appendChild(end);
-
-  for (let c = 0; c < numZSlots; c++) {
-    const z = -(zNear + (c / (numZSlots - 1)) * depthSpan);
-    const dot = document.createElement('a-sphere');
-    dot.setAttribute('position', `0 ${centerY} ${z}`);
-    dot.setAttribute('radius', '0.06');
-    dot.setAttribute('color', '#888');
-    dot.setAttribute('material', 'opacity: 0.7; emissive: #444; emissiveIntensity: 0.5');
-    group.appendChild(dot);
-  }
   swarmContainer.appendChild(group);
 }
