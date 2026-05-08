@@ -78,18 +78,26 @@ function proceed() {
     if (experienceActivated) return;
     experienceActivated = true;
     window.removeEventListener('deviceorientation', tiltHandler);
+    calibMsg.innerHTML = '<h2>ANCORAGGIO...</h2>';
 
-    // UI Update
-    calibMsg.innerHTML = '<h2>ANCORAGGIO...</h2><p>Resta immobile, sto fissando il tunnel a terra</p>';
+    // Use XrController.hitTest to find the floor right in front of the user
+    const hitTest = window.XR8.XrController.hitTest(0, 0);
 
-    // Simply hide overlay. xrextras-anchor will take care of placing the swarm
-    setTimeout(() => {
-      document.getElementById('overlay').classList.add('hidden');
-      createSwarm(document.querySelector('#swarm'));
-      console.log('AR Tunnel Locked to floor');
-    }, 500);
+    if (hitTest.length > 0) {
+      const {position, rotation} = hitTest[0];
+      const swarm = document.querySelector('#swarm');
+      swarm.setAttribute('position', position);
+      swarm.setAttribute('rotation', rotation);
+    } else {
+      // Fallback: place 1.5m in front of camera
+      const swarm = document.querySelector('#swarm');
+      swarm.setAttribute('position', '0 0 -1.5');
+      swarm.setAttribute('rotation', '0 0 0');
+    }
+
+    document.getElementById('overlay').classList.add('hidden');
+    createSwarm(document.querySelector('#swarm'));
   };
-
   // Tap attiva sempre (anche se non è verde, per non bloccare l'utente)
   calibMsg.addEventListener('click', activate);
 
