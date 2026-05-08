@@ -97,14 +97,15 @@ function proceed() {
     swarm.object3D.updateMatrix();
 
     document.getElementById('overlay').classList.add('hidden');
+    console.log('Spawning butterflies...');
     createSwarm(swarm);
     console.log('AR Tunnel hard-locked');
   };
-  };
-  // Tap attiva sempre (anche se non è verde, per non bloccare l'utente)
+  
+  // Tap attiva sempre
   calibMsg.addEventListener('click', activate);
 
-  // Tilt attiva solo se il tracking è buono (per garantire qualità)
+  // Tilt attiva solo se il tracking è buono
   const tiltHandler = (e) => {
     if (e.beta !== null && Math.abs(e.beta) > 75 && trackingIsNormal) activate();
   };
