@@ -22,47 +22,47 @@ AFRAME.registerComponent('butterfly-color', {
 let experienceActivated = false;
 let realityReadyFired = false;
 let trackingIsNormal = false;
-const DEBUG = new URLSearchParams(location.search).has('debug');
+const DEBUG = true; // Forziamo debug per vedere cosa succede
 
-// Track realityready and tracking status
-window.addEventListener('DOMContentLoaded', () => {
-  const scene = document.querySelector('a-scene');
-  if (scene) {
-    scene.addEventListener('realityready', () => { realityReadyFired = true; });
-    
-    // Listen for tracking status changes
-    scene.addEventListener('xartracking', (event) => {
-      if (event.detail.status === 'NORMAL') {
-        trackingIsNormal = true;
-        const statusIcon = document.querySelector('.scan-animation');
-        if (statusIcon) statusIcon.style.background = '#00ff00'; // Green = calibrated
-      } else {
-        trackingIsNormal = false;
-        const statusIcon = document.querySelector('.scan-animation');
-        if (statusIcon) statusIcon.style.background = '#fe5000'; // Orange = calibrating
-      }
-    });
+// Funzione per aggiornare lo stato visivo della calibrazione
+function updateTrackingUI(status) {
+  const statusIcon = document.querySelector('.scan-animation');
+  const calibText = document.querySelector('#calibration-msg p');
+  
+  if (!statusIcon) return;
+
+  if (status === 'NORMAL') {
+    trackingIsNormal = true;
+    statusIcon.style.background = '#00ff00';
+    statusIcon.style.boxShadow = '0 0 20px #00ff00';
+    if (calibText) calibText.innerHTML = "<b>SISTEMA CALIBRATO!</b><br>Alza il telefono o tocca per iniziare.";
+  } else {
+    trackingIsNormal = false;
+    statusIcon.style.background = '#fe5000';
+    statusIcon.style.boxShadow = '0 0 15px #fe5000';
+    if (calibText && !experienceActivated) calibText.innerText = "Muovi il telefono per mappare il pavimento...";
   }
+}
+
+// Global listeners per 8th Wall
+window.addEventListener('realityready', () => { realityReadyFired = true; });
+window.addEventListener('xartracking', (event) => {
+  updateTrackingUI(event.detail.status);
 });
 
-// HUD debug
-if (DEBUG) {
-  window.addEventListener('DOMContentLoaded', () => {
-    const hud = document.createElement('div');
-    hud.id = 'debug-hud';
-    hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#00ff00;padding:8px 12px;font:12px monospace;border:1px solid #00ff00;border-radius:4px;pointer-events:none';
-    hud.innerHTML = '<b>DEBUG V8</b> · in attesa';
-    document.body.appendChild(hud);
-  });
-}
+// Fallback per diversi tipi di eventi status
+window.addEventListener('xrstatus', (event) => {
+  if (event.detail.status === 'requesting' || event.detail.status === 'initializing') {
+    updateTrackingUI('SEARCHING');
+  }
+});
 
 // ──  Start flow  ───────────────────────────────────────────────────
 function startExperience() {
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission().then(response => {
-      if (response === 'granted') { proceed(); }
-      else { proceed(); }
+      proceed();
     }).catch(() => proceed());
   } else {
     proceed();
@@ -74,70 +74,58 @@ function proceed() {
   const calibMsg = document.getElementById('calibration-msg');
   calibMsg.classList.remove('hidden');
 
-  const activate = (forced = false) => {
+  const activate = () => {
     if (experienceActivated) return;
-    
-    // We strictly wait for NORMAL tracking to ensure scale (meters) is correct
-    if (!forced && !trackingIsNormal) {
-      console.log('Waiting for NORMAL tracking status...');
-      return;
-    }
-
     experienceActivated = true;
+    
     window.removeEventListener('deviceorientation', tiltHandler);
     
-    calibMsg.innerHTML = '<h2>ANCORAGGIO...</h2><p>Resta immobile, sto fissando il tunnel a terra</p>';
+    // Feedback immediato
+    calibMsg.innerHTML = '<h2 style="color:#00ff00">ANCORAGGIO IN CORSO...</h2><p>Sto fissando la posizione. Resta immobile.</p>';
     
-    // 1. RECENTER: This is the magic. It makes your current position 0,0,0 and your yaw 0.
+    // 1. RECENTER FORZATO
     if (window.XR8) {
-      window.XR8.XrController.recenter();
+      console.log('Chiamata XR8.recenter()');
+      window.XR8.recenter();
     }
 
-    // 2. WAIT: Let the SLAM engine settle after recenter
+    // 2. PAUSA DI STABILIZZAZIONE (Essenziale per evitare il salto di 20 gradi)
     setTimeout(() => {
       document.getElementById('overlay').classList.add('hidden');
       
       const swarm = document.querySelector('#swarm');
       
-      // 3. POSITION: Since we recentered, 0 0 0 is exactly where you are standing.
+      // Dopo il recenter, (0,0,0) è esattamente dove ti trovi e (0,0,0) rotazione è dritto davanti a te
       swarm.setAttribute('position', '0 0 0');
       swarm.setAttribute('rotation', '0 0 0');
       
-      if (DEBUG) addDebugWireframe(swarm);
       createSwarm(swarm);
+      if (DEBUG) addDebugWireframe(swarm);
       
-      console.log('AR World Anchored at 0,0,0');
-    }, 1000);
+      console.log('Tunnel ancorato a 0,0,0 dopo Recenter');
+    }, 1200);
   };
 
-  // Tap forces activation even if tracking isn't "perfect"
-  calibMsg.addEventListener('click', () => activate(true));
+  // Tap attiva sempre (anche se non è verde, per non bloccare l'utente)
+  calibMsg.addEventListener('click', activate);
 
-  // Vertical tilt activates ONLY if tracking is stable (for best quality)
+  // Tilt attiva solo se il tracking è buono (per garantire qualità)
   const tiltHandler = (e) => {
-    if (e.beta !== null && Math.abs(e.beta) > 75 && trackingIsNormal) activate(false);
+    if (e.beta !== null && Math.abs(e.beta) > 75 && trackingIsNormal) activate();
   };
   window.addEventListener('deviceorientation', tiltHandler);
 
-  // Auto-activate if perfect tracking is found and user is already vertical
-  const checkReady = setInterval(() => {
-    if (trackingIsNormal && experienceActivated === false) {
-      // We could auto-activate here, but better let the user decide with tilt or tap
-    }
-  }, 500);
-  
-  setTimeout(() => { clearInterval(checkReady); activate(true); }, 20000);
+  // Fallback estremo dopo 20s
+  setTimeout(() => { if (!experienceActivated) activate(); }, 20000);
 }
 
 // ──  Swarm logic  ──────────────────────────────────────────────────
 function createSwarm(swarmContainer) {
   const numButterflies = 90;
-  
-  // MEASUREMENTS (Metres)
-  const tunnelLength = 22;   // 11m left, 11m right
-  const zNear        = 0.5;  // Starts 0.5m in front of you
-  const zFar         = 5.5;  // Ends 5.5m in front of you (5m deep)
-  const heightBase   = 2.2;  // Height of flight
+  const tunnelLength = 22;   
+  const zNear        = 0.5;  
+  const zFar         = 5.5;  
+  const heightBase   = 2.2;  
   const heightJitter = 0.6;  
 
   const numZSlots = 10;
@@ -158,7 +146,6 @@ function createSwarm(swarmContainer) {
     const resetButterfly = (el, isFirstSpawn = false) => {
       const startX = tunnelLength / 2;
       const endX   = -(tunnelLength / 2);
-      // If first spawn, distribute them along the length
       const currentSpawnX = isFirstSpawn ? (Math.random() * tunnelLength - startX) : startX;
       
       const moveDuration  = Math.random() * 5000 + 12000;
@@ -174,14 +161,6 @@ function createSwarm(swarmContainer) {
         dur: currentDuration,
         easing: 'linear'
       });
-
-      el.setAttribute('animation__color', {
-        property: 'butterfly-color.color',
-        from: '#ce0058',
-        to: '#fe5000',
-        dur: currentDuration * 0.5,
-        easing: 'linear'
-      });
     };
 
     butterfly.addEventListener('animationcomplete__move', () => resetButterfly(butterfly, false));
@@ -190,34 +169,25 @@ function createSwarm(swarmContainer) {
   }
 }
 
-// ──  Debug wireframe overlay  ──────────────────────────────────────
+// ──  Debug wireframe  ──────────────────────────────────────────────
 function addDebugWireframe(swarmContainer) {
-  const tunnelLength = 22;
-  const zNear = 0.5;
-  const zFar = 5.5;
-  const heightBase = 2.2;
-  const heightJitter = 0.6;
-  
-  const depth = zFar - zNear;
-  const centerZ = -(zNear + depth/2);
-
   const group = document.createElement('a-entity');
   
-  // Floor guide (18x4.3 terrace reference)
+  // Piano terra azzurro (mostra dove il sistema crede sia il pavimento)
   const floor = document.createElement('a-plane');
-  floor.setAttribute('position', `0 0.05 ${centerZ}`);
   floor.setAttribute('rotation', '-90 0 0');
-  floor.setAttribute('width', tunnelLength);
-  floor.setAttribute('height', depth);
+  floor.setAttribute('width', '22');
+  floor.setAttribute('height', '5');
+  floor.setAttribute('position', '0 0.02 -3');
   floor.setAttribute('material', 'color: #00aaff; wireframe: true; opacity: 0.5');
   group.appendChild(floor);
 
-  // User position marker
-  const marker = document.createElement('a-cylinder');
-  marker.setAttribute('radius', '0.3');
-  marker.setAttribute('height', '0.1');
-  marker.setAttribute('color', '#ff0000');
-  group.appendChild(marker);
+  // Punto di origine (dove eri tu al momento dello start)
+  const origin = document.createElement('a-cylinder');
+  origin.setAttribute('radius', '0.2');
+  origin.setAttribute('height', '0.1');
+  origin.setAttribute('color', '#ff0000');
+  group.appendChild(origin);
 
   swarmContainer.appendChild(group);
 }
