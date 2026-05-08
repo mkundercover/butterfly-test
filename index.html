@@ -4,24 +4,22 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script>
-      // Impedisce al WebVR polyfill bundled in A-Frame di fare richieste TLS esterne
       window.WebVRConfig = { DPDB_DATA: { devices: [] } };
       window.WebXRPolyfill = null;
     </script>
     <title>Farfalle AR</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="vendor/aframe-extras-6.1.1.min.js"></script>
-    <link rel="stylesheet" href="css/style.css">
+    <script src="vendor/aframe-extras-6.1.1.min.js?v=4"></script>
+    <link rel="stylesheet" href="css/style.css?v=4">
   </head>
   <body>
-    <!-- Feed camera: sfondo per iOS/fallback (magic window) -->
     <video id="ar-video" autoplay playsinline muted></video>
 
     <div id="overlay">
-      <button id="start-btn" class="btn-start">START AR</button>
+      <!-- onclick diretto: non dipende da addEventListener né da DOMContentLoaded -->
+      <button id="start-btn" class="btn-start" onclick="startAR()">START AR</button>
     </div>
 
-    <!-- pointer-events: none finché l'overlay è visibile (via CSS) -->
     <a-scene
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
@@ -34,6 +32,6 @@
       <a-entity id="swarm" position="0 0 -1.5"></a-entity>
     </a-scene>
 
-    <script src="js/main.js"></script>
+    <script src="js/main.js?v=4"></script>
   </body>
 </html>

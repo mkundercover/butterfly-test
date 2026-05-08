@@ -1,10 +1,49 @@
-// Pre-controlla WebXR al caricamento della pagina (senza bisogno di gesto utente)
-// così sul click non serve fare await prima di getUserMedia (fondamentale su iOS Safari)
+// Pre-controlla WebXR appena la pagina carica
 let webxrARSupported = false;
 if (navigator.xr) {
     navigator.xr.isSessionSupported('immersive-ar')
         .then(ok => { webxrARSupported = ok; })
         .catch(() => {});
+}
+
+// Funzione globale chiamata direttamente da onclick sul bottone
+async function startAR() {
+    const btn = document.getElementById('start-btn');
+    btn.disabled = true;
+    btn.textContent = 'Avvio...';
+
+    try {
+        if (webxrARSupported) {
+            // Android Chrome + ARCore: WebXR nativo
+            const scene = document.querySelector('a-scene');
+            scene.setAttribute('webxr', 'requiredFeatures: local; optionalFeatures: hit-test, local-floor');
+            const enterAR = async () => {
+                await scene.enterAR();
+                document.getElementById('overlay').classList.add('hidden');
+                scene.classList.add('ar-active');
+                spawnButterflies();
+            };
+            scene.hasLoaded ? await enterAR() : scene.addEventListener('loaded', enterAR, { once: true });
+
+        } else {
+            // iOS Safari + tutti gli altri: camera passthrough + DeviceOrientation
+            // getUserMedia deve essere il primo await (user gesture context iOS)
+            await startCamera();
+            await requestOrientationPermission();
+            document.getElementById('overlay').classList.add('hidden');
+            document.querySelector('a-scene').classList.add('ar-active');
+            spawnButterflies();
+        }
+
+    } catch (err) {
+        const msg = err?.message || String(err);
+        const friendlyMsg = (msg.includes('Permission') || msg.includes('NotAllowed') || msg.includes('denied'))
+            ? 'Permesso fotocamera negato.\nRicarica la pagina e consenti l\'accesso alla fotocamera.'
+            : 'Errore: ' + msg;
+        alert(friendlyMsg);
+        btn.disabled = false;
+        btn.textContent = 'START AR';
+    }
 }
 
 async function startCamera() {
@@ -14,7 +53,6 @@ async function startCamera() {
         audio: false
     });
     video.srcObject = stream;
-    // Non attendere 'playing': su alcuni browser non scatta se il video è muted/nascosto
     video.play().catch(() => {});
 }
 
@@ -40,68 +78,3 @@ function spawnButterflies() {
         swarm.appendChild(b);
     }
 }
-
-function showError(msg) {
-    // Usa alert come fallback garantito, poi mostra anche il toast
-    console.error('[AR] ' + msg);
-    const div = document.createElement('div');
-    div.style.cssText = [
-        'position:fixed', 'bottom:40px', 'left:50%',
-        'transform:translateX(-50%)', 'background:rgba(200,0,0,0.9)',
-        'color:#fff', 'padding:14px 24px', 'border-radius:10px',
-        'font-size:15px', 'z-index:99999', 'max-width:85%',
-        'text-align:center', 'font-family:sans-serif', 'box-shadow:0 4px 20px rgba(0,0,0,0.5)'
-    ].join(';');
-    div.textContent = msg;
-    document.body.appendChild(div);
-    setTimeout(() => div.remove(), 6000);
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('start-btn');
-    if (!btn) return;
-
-    btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        btn.textContent = 'Avvio...';
-
-        try {
-            if (webxrARSupported) {
-                // --- Android Chrome + ARCore: WebXR nativo (SLAM, zero drift) ---
-                const scene = document.querySelector('a-scene');
-                scene.setAttribute('webxr', 'requiredFeatures: local; optionalFeatures: hit-test, local-floor');
-
-                const enterAR = async () => {
-                    await scene.enterAR();
-                    document.getElementById('overlay').classList.add('hidden');
-                    scene.classList.add('ar-active');
-                    spawnButterflies();
-                };
-
-                if (scene.hasLoaded) {
-                    await enterAR();
-                } else {
-                    scene.addEventListener('loaded', enterAR, { once: true });
-                }
-
-            } else {
-                // --- iOS Safari + tutto il resto: camera passthrough + DeviceOrientation ---
-                // getUserMedia DEVE essere la prima chiamata async per mantenere
-                // il contesto del gesto utente su iOS Safari
-                await startCamera();
-                await requestOrientationPermission();
-                document.getElementById('overlay').classList.add('hidden');
-                document.querySelector('a-scene').classList.add('ar-active');
-                spawnButterflies();
-            }
-
-        } catch (err) {
-            const msg = err?.message || String(err);
-            showError(msg.includes('Permission') || msg.includes('NotAllowed')
-                ? 'Permesso fotocamera negato. Ricarica la pagina e consenti l\'accesso.'
-                : 'Errore: ' + msg);
-            btn.disabled = false;
-            btn.textContent = 'START AR';
-        }
-    });
-});
