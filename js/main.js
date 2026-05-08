@@ -1,3 +1,24 @@
+// Componente A-Frame: volo delle farfalle lungo X (destra → sinistra nel tunnel)
+// Registrato prima che A-Frame inizializzi la scena
+AFRAME.registerComponent('butterfly-fly', {
+    schema: {
+        y:     { type: 'number', default: 1.5 },
+        z:     { type: 'number', default: -3 },
+        speed: { type: 'number', default: 3 }   // m/s
+    },
+    init: function () {
+        // Posizione X iniziale casuale: farfalle distribuite lungo tutto il tunnel
+        this.x = -14 + Math.random() * 28;
+        this.el.object3D.position.set(this.x, this.data.y, this.data.z);
+    },
+    tick: function (time, delta) {
+        this.x -= this.data.speed * (delta / 1000); // vola verso sinistra (-X)
+        if (this.x < -14) this.x = 14;             // riparte dall'estremo destro
+        this.el.object3D.position.x = this.x;
+    }
+});
+
+// Pre-controlla WebXR al caricamento (senza gesto utente)
 let webxrARSupported = false;
 if (navigator.xr) {
     navigator.xr.isSessionSupported('immersive-ar')
@@ -11,7 +32,7 @@ async function startAR() {
     btn.textContent = 'Avvio...';
 
     if (webxrARSupported) {
-        // --- Android Chrome + ARCore ---
+        // Android Chrome + ARCore
         try {
             const scene = document.querySelector('a-scene');
             scene.setAttribute('webxr', 'requiredFeatures: local; optionalFeatures: hit-test, local-floor');
@@ -20,7 +41,7 @@ async function startAR() {
                 document.getElementById('overlay').classList.add('hidden');
                 scene.classList.add('ar-active');
                 await waitForScene();
-                spawnButterflies(false);
+                spawnButterflies();
             };
             scene.hasLoaded ? await doEnter() : scene.addEventListener('loaded', doEnter, { once: true });
         } catch (err) {
@@ -29,8 +50,8 @@ async function startAR() {
         return;
     }
 
-    // --- iOS Safari + tutto il resto ---
-    // requestPermission e getUserMedia devono partire PRIMA del primo await (user gesture iOS)
+    // iOS Safari + tutto il resto: camera passthrough + DeviceOrientation
+    // requestPermission e getUserMedia partono PRIMA del primo await (user gesture iOS)
     const orientPromise =
         (typeof DeviceOrientationEvent !== 'undefined' &&
          typeof DeviceOrientationEvent.requestPermission === 'function')
@@ -58,10 +79,8 @@ async function startAR() {
 
         document.getElementById('overlay').classList.add('hidden');
         document.querySelector('a-scene').classList.add('ar-active');
-
         await waitForScene();
-        // surroundMode=true: farfalle in cerchio 360° → utente è già nel mezzo
-        spawnButterflies(true);
+        spawnButterflies();
     } catch (err) {
         showARError(err, btn);
     }
@@ -73,50 +92,55 @@ function waitForScene() {
     return new Promise(resolve => scene.addEventListener('loaded', resolve, { once: true }));
 }
 
-function spawnButterflies(surroundMode) {
-    const swarm = document.getElementById('swarm');
-    swarm.setAttribute('position', surroundMode ? '0 0 0' : '0 0 -1.5');
+// Dimensioni tunnel da wireframe.html
+const TUNNEL = {
+    xStart:  14,    // farfalle partono da destra
+    xEnd:   -14,    // arrivano a sinistra
+    width:   7.5,   // profondità Z del tunnel
+    height:  3.3,   // altezza Y del tunnel
+    groundY: 0.5,   // offset Y dal suolo
+    povZ:    1,     // distanza minima Z dallo spettatore
+    rows:    12,
+    cols:    13
+};
 
-    for (let i = 0; i < 15; i++) {
+function spawnButterflies() {
+    const swarm = document.getElementById('swarm');
+    swarm.setAttribute('position', '0 0 0');
+
+    // Genera la griglia di slot Y/Z identica a wireframe.html
+    const slots = [];
+    for (let r = 0; r < TUNNEL.rows; r++) {
+        for (let c = 0; c < TUNNEL.cols; c++) {
+            slots.push({
+                y: (r / (TUNNEL.rows - 1)) * TUNNEL.height + TUNNEL.groundY,
+                z: -((c / (TUNNEL.cols - 1)) * TUNNEL.width + TUNNEL.povZ)
+            });
+        }
+    }
+    // Mescola e prendi 15 slot casuali
+    slots.sort(() => Math.random() - 0.5);
+
+    slots.slice(0, 15).forEach(slot => {
         const b = document.createElement('a-entity');
         b.setAttribute('gltf-model', '#butterflyModel');
-        // clip:* esegue tutte le animazioni del GLB, indipendentemente dal nome
         b.setAttribute('animation-mixer', 'clip: *; loop: repeat; timeScale: 1');
-        b.setAttribute('scale', '0.2 0.2 0.2');
-        b.setAttribute('rotation', `0 ${Math.round(Math.random() * 360)} 0`);
-
-        let x, y, z;
-        if (surroundMode) {
-            // Distribuzione cilindrica 360°: utente al centro, farfalle tutto intorno
-            const angle = Math.random() * Math.PI * 2;
-            const dist  = 0.8 + Math.random() * 1.7;   // 0.8 – 2.5 m di distanza
-            x = (Math.cos(angle) * dist).toFixed(2);
-            z = (Math.sin(angle) * dist).toFixed(2);
-            y = (0.5 + Math.random() * 1.8).toFixed(2); // 0.5 – 2.3 m di altezza
-        } else {
-            // WebXR Android: di fronte all'utente
-            x = (Math.random() * 4 - 2).toFixed(2);
-            y = (Math.random() * 2 + 0.5).toFixed(2);
-            z = (Math.random() * -3 - 0.5).toFixed(2);
-        }
-
-        b.setAttribute('position', `${x} ${y} ${z}`);
-
-        // Galleggiamento verticale casuale per ogni farfalla
-        const dur    = 2000 + Math.round(Math.random() * 2000);
-        const yHigh  = (parseFloat(y) + 0.2 + Math.random() * 0.2).toFixed(2);
-        b.setAttribute('animation__float',
-            `property: position; from: ${x} ${y} ${z}; to: ${x} ${yHigh} ${z}; ` +
-            `dur: ${dur}; dir: alternate; loop: true; easing: easeInOutSine`);
-
+        b.setAttribute('scale', '0.2 0.15 0.2');
+        // Orientamento di volo: ruota di 90° Y per far guardare le farfalle verso -X
+        b.setAttribute('rotation', `0 ${90 + Math.round((Math.random() - 0.5) * 30)} 0`);
+        b.setAttribute('butterfly-fly', [
+            `y: ${slot.y.toFixed(2)}`,
+            `z: ${slot.z.toFixed(2)}`,
+            `speed: ${(2 + Math.random() * 2).toFixed(2)}`
+        ].join('; '));
         swarm.appendChild(b);
-    }
+    });
 }
 
 function showARError(err, btn) {
     const msg  = err?.message || String(err);
     const text = (msg.includes('Permission') || msg.includes('NotAllowed') || msg.includes('denied'))
-        ? 'Permesso negato.\nRicarica la pagina e consenti fotocamera e movimento.'
+        ? 'Permesso negato.\nRicarica e consenti fotocamera e movimento.'
         : 'Errore: ' + msg;
     alert(text);
     if (btn) { btn.disabled = false; btn.textContent = 'START AR'; }
