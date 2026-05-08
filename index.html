@@ -47,13 +47,16 @@
     <a-scene
       xrweb="allowedDevices: mobile; scale: absolute"
       renderer="colorManagement: true; antialias: true"
-      vr-mode-ui="enabled: false">
+      vr-mode-ui="enabled: false"
+      xrextras-tap-recenter>
       <a-assets>
-        <a-asset-item id="butterflyModel" src="assets/models/animated_butterfly_fucsia.glb"></a-asset-item>
+        <a-asset-item id="butterflyModel" src="assets/models/butterfly_fucsia.glb"></a-asset-item>
       </a-assets>
 
       <a-camera id="main-camera"></a-camera>
-      <a-entity id="swarm"></a-entity>
+      
+      <!-- xrextras-anchor keeps the swarm fixed in world space -->
+      <a-entity id="swarm" xrextras-anchor="name: swarm-anchor; scale: absolute;"></a-entity>
 
 
       <a-entity light="type: ambient; intensity: 1.2;"></a-entity>
