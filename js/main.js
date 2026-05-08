@@ -101,17 +101,15 @@ function spawnButterflies() {
     const swarm = document.getElementById('swarm');
     swarm.setAttribute('position', '0 0 0');
 
-    // Griglia tunnel reale da wireframe.html — dimensioni invariate
-    // Tunnel reale: Z -2m → -8m (evita Z=-1m dove scala 0.3 riempirebbe lo schermo)
-    // iPhone portrait FOV orizzontale ~50° → a Z=-4m vede ±1.9m di larghezza
-    const tunnelW = 6.0, tunnelH = 3.3, groundY = 0.5, minZ = 2.0;
-    const rows = 8, cols = 10;
+    // Griglia IDENTICA a wireframe.html — nessuna modifica alle dimensioni reali
+    const tunnelW = 7.5, tunnelH = 3.3, groundY = 0.5, povZ = 1;
+    const rows = 12, cols = 13;  // 156 slot totali, 90 occupati nel wireframe
     const slots = [];
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             slots.push({
-                y: (r / (rows - 1)) * tunnelH + groundY,
-                z: -((c / (cols - 1)) * tunnelW + minZ)   // -2m → -8m
+                y: (r / (rows - 1)) * tunnelH + groundY,  // 0.5 → 3.8m
+                z: -((c / (cols - 1)) * tunnelW + povZ)   // -1 → -8.5m
             });
         }
     }
@@ -123,8 +121,10 @@ function spawnButterflies() {
         const b = document.createElement('a-entity');
         b.setAttribute('gltf-model', '#butterflyModel');
         b.setAttribute('animation-mixer', 'clip: *; loop: repeat; timeScale: 1');
-        b.setAttribute('scale', '0.3 0.3 0.3');
-        b.setAttribute('rotation', `0 ${90 + Math.round((Math.random() - 0.5) * 30)} 0`);
+        // scala leggermente sopra "reale" (wireframe: 0.2 0.15 0.2) per visibilità
+        b.setAttribute('scale', '0.25 0.2 0.25');
+        // Y=-90: farfalla guarda verso -X (direzione di volo +14→-14)
+        b.setAttribute('rotation', `0 ${-90 + Math.round((Math.random() - 0.5) * 20)} 0`);
         b.setAttribute('position', `${startX.toFixed(2)} ${slot.y.toFixed(2)} ${slot.z.toFixed(2)}`);
         swarm.appendChild(b);
 
