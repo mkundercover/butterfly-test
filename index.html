@@ -2,7 +2,10 @@
 <html lang="it">
   <head>
     <meta charset="utf-8">
-    <meta name="webxr-polyfill-config" content="enabled: false">
+    <script>
+      window.WebXRPolyfill = null;
+      window.WEBVR_POLYFILL_CONFIG = { FORCE_ENABLE_VR: false };
+    </script>
     <title>Farfalle AR</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
