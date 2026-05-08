@@ -102,36 +102,36 @@ function proceed() {
 // 18m flight axis to the physical terrace length regardless of the
 // SLAM world orientation at initialization.
 function realignSwarm(updateHud) {
-  const swarm  = document.querySelector('#swarm');
-  const camera = document.getElementById('main-camera');
-  if (!camera || !swarm) return;
+  const swarm   = document.querySelector('#swarm');
+  const sceneEl = document.querySelector('a-scene');
+  if (!swarm || !sceneEl) return;
 
-  const camObj = camera.object3D;
+  // sceneEl.camera is the actual THREE.PerspectiveCamera that 8thwall
+  // updates for rendering — more reliable than camera.object3D which
+  // may not be updated by 8thwall's pipeline in world-tracking mode.
+  const threeCam = sceneEl.camera;
+  if (!threeCam) return;
+  threeCam.updateMatrixWorld(true);
 
-  // Extract true horizontal yaw via quaternion math.
-  // camera.getAttribute('rotation').y is unreliable when the phone is
-  // tilted (held up for AR viewing) — Euler decomposition mixes pitch
-  // and yaw near 90° tilt, causing the box to appear diagonal/rotated.
-  const fwd = new THREE.Vector3(0, 0, -1)
-    .applyQuaternion(camObj.getWorldQuaternion(new THREE.Quaternion()));
+  // True horizontal yaw from the rendering camera's world quaternion.
+  const q   = new THREE.Quaternion();
+  threeCam.getWorldQuaternion(q);
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
   fwd.y = 0;
-  if (fwd.lengthSq() < 0.001) return; // phone vertical pointing up, skip
+  if (fwd.lengthSq() < 0.001) return;
   fwd.normalize();
-  // atan2(fwd.x, -fwd.z) gives the A-Frame Y-rotation that matches the
-  // camera's horizontal heading regardless of phone tilt angle.
   const yawDeg = THREE.MathUtils.radToDeg(Math.atan2(fwd.x, -fwd.z));
 
-  // Anchor swarm at camera's current world XZ, Y=0 (ground).
-  const worldPos = new THREE.Vector3();
-  camObj.getWorldPosition(worldPos);
-  swarm.setAttribute('position', `${worldPos.x} 0 ${worldPos.z}`);
+  // World position of the actual rendering camera.
+  const pos = new THREE.Vector3();
+  threeCam.getWorldPosition(pos);
+
+  swarm.setAttribute('position', `${pos.x} 0 ${pos.z}`);
   swarm.setAttribute('rotation', `0 ${yawDeg} 0`);
 
-  if (updateHud) {
-    const hud = document.getElementById('debug-hud');
-    if (hud) hud.innerHTML =
-      `<b>DEBUG</b> · pos=(${worldPos.x.toFixed(1)},${worldPos.z.toFixed(1)}) yaw=${yawDeg.toFixed(1)}°`;
-  }
+  const hud = document.getElementById('debug-hud');
+  if (hud) hud.innerHTML =
+    `<b>v4</b> · pos=(${pos.x.toFixed(1)},${pos.z.toFixed(1)}) yaw=${yawDeg.toFixed(1)}°`;
 }
 
 // ──  Swarm logic  ──────────────────────────────────────────────────
@@ -223,6 +223,14 @@ function addDebugWireframe(swarmContainer) {
   box.setAttribute('depth',  depthSpan);
   box.setAttribute('material', 'color: #fe5000; wireframe: true; opacity: 1');
   group.appendChild(box);
+
+  // ── Anchor marker: red sphere at swarm origin ─────────────────────
+  const anchor = document.createElement('a-sphere');
+  anchor.setAttribute('position', '0 0.1 0');
+  anchor.setAttribute('radius', '0.25');
+  anchor.setAttribute('color', '#ff0000');
+  anchor.setAttribute('material', 'emissive: #ff0000; emissiveIntensity: 1');
+  group.appendChild(anchor);
 
   // ── Ground footprint (physical terrace outline) ────────────────────
   const groundZ = -(zNear + depthSpan / 2);
