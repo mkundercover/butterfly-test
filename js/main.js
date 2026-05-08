@@ -1,22 +1,27 @@
-// Componente A-Frame: volo delle farfalle lungo X (destra → sinistra nel tunnel)
-// Registrato prima che A-Frame inizializzi la scena
-AFRAME.registerComponent('butterfly-fly', {
-    schema: {
-        y:     { type: 'number', default: 1.5 },
-        z:     { type: 'number', default: -3 },
-        speed: { type: 'number', default: 3 }   // m/s
-    },
-    init: function () {
-        // Posizione X iniziale casuale: farfalle distribuite lungo tutto il tunnel
-        this.x = -14 + Math.random() * 28;
-        this.el.object3D.position.set(this.x, this.data.y, this.data.z);
-    },
-    tick: function (time, delta) {
-        this.x -= this.data.speed * (delta / 1000); // vola verso sinistra (-X)
-        if (this.x < -14) this.x = 14;             // riparte dall'estremo destro
-        this.el.object3D.position.x = this.x;
+// Loop di volo: requestAnimationFrame nativo, funziona su iOS e Android
+const flyingButterflies = [];
+let rafRunning = false;
+
+function startFlightLoop() {
+    if (rafRunning) return;
+    rafRunning = true;
+    let lastTime = performance.now();
+
+    function loop() {
+        const now = performance.now();
+        const dt  = Math.min((now - lastTime) / 1000, 0.05); // max 50ms per frame
+        lastTime  = now;
+
+        for (let i = 0; i < flyingButterflies.length; i++) {
+            const b = flyingButterflies[i];
+            b.x -= b.speed * dt;
+            if (b.x < -14) b.x = 14;
+            if (b.el.object3D) b.el.object3D.position.x = b.x;
+        }
+        requestAnimationFrame(loop);
     }
-});
+    requestAnimationFrame(loop);
+}
 
 // Pre-controlla WebXR al caricamento (senza gesto utente)
 let webxrARSupported = false;
@@ -42,6 +47,7 @@ async function startAR() {
                 scene.classList.add('ar-active');
                 await waitForScene();
                 spawnButterflies();
+                startFlightLoop();
             };
             scene.hasLoaded ? await doEnter() : scene.addEventListener('loaded', doEnter, { once: true });
         } catch (err) {
@@ -50,8 +56,7 @@ async function startAR() {
         return;
     }
 
-    // iOS Safari + tutto il resto: camera passthrough + DeviceOrientation
-    // requestPermission e getUserMedia partono PRIMA del primo await (user gesture iOS)
+    // iOS Safari + tutto il resto
     const orientPromise =
         (typeof DeviceOrientationEvent !== 'undefined' &&
          typeof DeviceOrientationEvent.requestPermission === 'function')
@@ -73,14 +78,14 @@ async function startAR() {
         const [orientResult, stream] = await Promise.all([orientPromise, camPromise]);
         if (orientResult !== 'granted') throw new Error('Permesso orientamento negato');
 
-        const video = document.getElementById('ar-video');
-        video.srcObject = stream;
-        video.play().catch(() => {});
-
+        document.getElementById('ar-video').srcObject = stream;
+        document.getElementById('ar-video').play().catch(() => {});
         document.getElementById('overlay').classList.add('hidden');
         document.querySelector('a-scene').classList.add('ar-active');
+
         await waitForScene();
         spawnButterflies();
+        startFlightLoop();
     } catch (err) {
         showARError(err, btn);
     }
@@ -94,21 +99,14 @@ function waitForScene() {
 
 // Dimensioni tunnel da wireframe.html
 const TUNNEL = {
-    xStart:  14,    // farfalle partono da destra
-    xEnd:   -14,    // arrivano a sinistra
-    width:   7.5,   // profondità Z del tunnel
-    height:  3.3,   // altezza Y del tunnel
-    groundY: 0.5,   // offset Y dal suolo
-    povZ:    1,     // distanza minima Z dallo spettatore
-    rows:    12,
-    cols:    13
+    width: 7.5, height: 3.3, groundY: 0.5, povZ: 1, rows: 12, cols: 13
 };
 
 function spawnButterflies() {
     const swarm = document.getElementById('swarm');
     swarm.setAttribute('position', '0 0 0');
 
-    // Genera la griglia di slot Y/Z identica a wireframe.html
+    // Griglia slot Y/Z identica a wireframe.html
     const slots = [];
     for (let r = 0; r < TUNNEL.rows; r++) {
         for (let c = 0; c < TUNNEL.cols; c++) {
@@ -118,7 +116,6 @@ function spawnButterflies() {
             });
         }
     }
-    // Mescola e prendi 15 slot casuali
     slots.sort(() => Math.random() - 0.5);
 
     slots.slice(0, 15).forEach(slot => {
@@ -126,14 +123,20 @@ function spawnButterflies() {
         b.setAttribute('gltf-model', '#butterflyModel');
         b.setAttribute('animation-mixer', 'clip: *; loop: repeat; timeScale: 1');
         b.setAttribute('scale', '0.2 0.15 0.2');
-        // Orientamento di volo: ruota di 90° Y per far guardare le farfalle verso -X
         b.setAttribute('rotation', `0 ${90 + Math.round((Math.random() - 0.5) * 30)} 0`);
-        b.setAttribute('butterfly-fly', [
-            `y: ${slot.y.toFixed(2)}`,
-            `z: ${slot.z.toFixed(2)}`,
-            `speed: ${(2 + Math.random() * 2).toFixed(2)}`
-        ].join('; '));
+
+        // X iniziale casuale: farfalle già distribuite lungo tutto il tunnel
+        const startX = -14 + Math.random() * 28;
+        b.setAttribute('position', `${startX.toFixed(2)} ${slot.y.toFixed(2)} ${slot.z.toFixed(2)}`);
+
         swarm.appendChild(b);
+
+        // Registra nel loop di volo nativo
+        flyingButterflies.push({
+            el:    b,
+            x:     startX,
+            speed: 2 + Math.random() * 2   // 2–4 m/s
+        });
     });
 }
 
