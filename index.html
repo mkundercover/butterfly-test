@@ -6,46 +6,14 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Farfalle AR</title>
-    <script crossorigin="anonymous" src="vendor/8frame-1.5.0.min.js"></script>
-    <script src="vendor/aframe-extras-6.1.1.min.js"></script>
-    <script async crossorigin="anonymous" src="vendor/8thwall/xr.js" data-preload-chunks="slam"></script>
-    <script src="//cdn.8thwall.com/web/xrextras/xrextras.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
   </head>
 
   <body>
-
-    <div id="overlay">
-      <div id="status-msg">
-        <div class="logo-area">
-          <a href="/">
-            <img src="assets/icons/Logo Ondulkart_w.svg" alt="Ondulkart" class="logo-img">
-          </a>
-        </div>
-
-        <div class="middle-content">
-          <h1 class="main-title">THE LINK</h1>
-          <p class="sub-title"><em>Where Technology meets the Soul of Nature</em></p>
-        </div>
-
-        <div class="button-area">
-          <button id="start-btn" class="btn-start">START</button>
-        </div>
-      </div>
-
-      <div id="calibration-msg" class="hidden">
-        <div class="icon-frame">
-          <div class="scan-animation"></div>
-        </div>
-        <h2>CALIBRAZIONE AR</h2>
-        <p>Inquadra il pavimento e muovi lentamente il telefono per calibrare lo spazio.</p>
-        <p style="margin-top:12px">Quando sei pronto, alza il telefono verticalmente.</p>
-        <p style="margin-top:24px;font-size:0.8em;opacity:0.5">oppure tocca per iniziare</p>
-      </div>
-    </div>
-
+    <!-- ... -->
     <a-scene
-      xrweb="allowedDevices: mobile; scale: absolute"
+      webxr="requiredFeatures: hit-test, local-floor"
       renderer="colorManagement: true; antialias: true"
       vr-mode-ui="enabled: false">
       <a-assets>

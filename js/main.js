@@ -1,38 +1,41 @@
 window.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('start-btn');
     if (btn) {
-        btn.addEventListener('click', async () => {
-            console.log("Richiesta permessi...");
-            // Richiesta permessi esplicita
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                try {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    if (response !== 'granted') {
-                        alert("Permessi negati. AR non funzionante.");
-                        return;
-                    }
-                } catch(e) { console.error(e); }
-            }
-            
+        btn.addEventListener('click', () => {
             document.getElementById('status-msg').classList.add('hidden');
             document.getElementById('calibration-msg').classList.remove('hidden');
+            
+            // Avvio sessione AR nativa
+            const scene = document.querySelector('a-scene');
+            scene.setAttribute('webxr', 'requiredFeatures: hit-test, local-floor');
+            
+            setupHitTest();
         });
     }
-    
-    // Auto-init swarm su tap di calibrazione
-    const calib = document.getElementById('calibration-msg');
-    if (calib) {
-        calib.addEventListener('click', () => {
-            document.getElementById('overlay').classList.add('hidden');
-            const swarm = document.getElementById('swarm');
-            swarm.setAttribute('position', '0 0 -1.5');
-            for(let i=0; i<10; i++) {
-                const b = document.createElement('a-entity');
-                b.setAttribute('gltf-model', '#butterflyModel');
-                b.setAttribute('position', `${Math.random()*2-1} ${Math.random()+1} ${Math.random()*-2}`);
-                b.setAttribute('scale', '0.2 0.2 0.2');
-                swarm.appendChild(b);
-            }
-        }, {once: true});
-    }
 });
+
+function setupHitTest() {
+    const scene = document.querySelector('a-scene');
+    const swarm = document.getElementById('swarm');
+    
+    // Posizionamento al primo tocco sul suolo rilevato
+    scene.addEventListener('click', (evt) => {
+        // Logica WebXR nativa per hit-test
+        const reticle = document.createElement('a-entity');
+        reticle.setAttribute('ar-hit-test', {targetEntity: '#swarm'});
+        scene.appendChild(reticle);
+        
+        document.getElementById('overlay').classList.add('hidden');
+        createSwarm(swarm);
+    }, {once: true});
+}
+
+function createSwarm(swarmContainer) {
+    for(let i=0; i<20; i++) {
+        const b = document.createElement('a-entity');
+        b.setAttribute('gltf-model', '#butterflyModel');
+        b.setAttribute('position', `${Math.random()*4-2} ${Math.random()*2+1} ${Math.random()*-3}`);
+        b.setAttribute('scale', '0.2 0.2 0.2');
+        swarmContainer.appendChild(b);
+    }
+}
