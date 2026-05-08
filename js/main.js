@@ -1,14 +1,12 @@
-// Verifica se il browser supporta WebXR immersive-ar (Android Chrome con ARCore)
-async function supportsWebXRAR() {
-    if (!navigator.xr) return false;
-    try {
-        return await navigator.xr.isSessionSupported('immersive-ar');
-    } catch {
-        return false;
-    }
+// Pre-controlla WebXR al caricamento della pagina (senza bisogno di gesto utente)
+// così sul click non serve fare await prima di getUserMedia (fondamentale su iOS Safari)
+let webxrARSupported = false;
+if (navigator.xr) {
+    navigator.xr.isSessionSupported('immersive-ar')
+        .then(ok => { webxrARSupported = ok; })
+        .catch(() => {});
 }
 
-// Avvia il feed della fotocamera posteriore (iOS + Android)
 async function startCamera() {
     const video = document.getElementById('ar-video');
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -16,12 +14,10 @@ async function startCamera() {
         audio: false
     });
     video.srcObject = stream;
-    await new Promise(resolve => {
-        video.addEventListener('playing', resolve, { once: true });
-    });
+    // Non attendere 'playing': su alcuni browser non scatta se il video è muted/nascosto
+    video.play().catch(() => {});
 }
 
-// Richiede il permesso DeviceOrientation su iOS 13+
 async function requestOrientationPermission() {
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -36,10 +32,29 @@ function spawnButterflies() {
         const b = document.createElement('a-entity');
         b.setAttribute('gltf-model', '#butterflyModel');
         b.setAttribute('animation-mixer', 'clip: Flying; loop: repeat');
-        b.setAttribute('position', `${(Math.random() * 4 - 2).toFixed(2)} ${(Math.random() * 2 + 0.5).toFixed(2)} ${(Math.random() * -3).toFixed(2)}`);
+        const x = (Math.random() * 4 - 2).toFixed(2);
+        const y = (Math.random() * 2 + 0.5).toFixed(2);
+        const z = (Math.random() * -3).toFixed(2);
+        b.setAttribute('position', `${x} ${y} ${z}`);
         b.setAttribute('scale', '0.2 0.2 0.2');
         swarm.appendChild(b);
     }
+}
+
+function showError(msg) {
+    // Usa alert come fallback garantito, poi mostra anche il toast
+    console.error('[AR] ' + msg);
+    const div = document.createElement('div');
+    div.style.cssText = [
+        'position:fixed', 'bottom:40px', 'left:50%',
+        'transform:translateX(-50%)', 'background:rgba(200,0,0,0.9)',
+        'color:#fff', 'padding:14px 24px', 'border-radius:10px',
+        'font-size:15px', 'z-index:99999', 'max-width:85%',
+        'text-align:center', 'font-family:sans-serif', 'box-shadow:0 4px 20px rgba(0,0,0,0.5)'
+    ].join(';');
+    div.textContent = msg;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 6000);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -51,49 +66,42 @@ window.addEventListener('DOMContentLoaded', () => {
         btn.textContent = 'Avvio...';
 
         try {
-            const hasWebXR = await supportsWebXRAR();
-
-            if (hasWebXR) {
-                // Android Chrome con ARCore: WebXR nativo, SLAM, nessun drift
+            if (webxrARSupported) {
+                // --- Android Chrome + ARCore: WebXR nativo (SLAM, zero drift) ---
                 const scene = document.querySelector('a-scene');
                 scene.setAttribute('webxr', 'requiredFeatures: local; optionalFeatures: hit-test, local-floor');
 
-                const onLoaded = async () => {
-                    try {
-                        await scene.enterAR();
-                        document.getElementById('overlay').classList.add('hidden');
-                        spawnButterflies();
-                    } catch (err) {
-                        showError('AR non disponibile: ' + (err.message || err));
-                        btn.disabled = false;
-                        btn.textContent = 'START AR';
-                    }
+                const enterAR = async () => {
+                    await scene.enterAR();
+                    document.getElementById('overlay').classList.add('hidden');
+                    scene.classList.add('ar-active');
+                    spawnButterflies();
                 };
 
                 if (scene.hasLoaded) {
-                    onLoaded();
+                    await enterAR();
                 } else {
-                    scene.addEventListener('loaded', onLoaded, { once: true });
+                    scene.addEventListener('loaded', enterAR, { once: true });
                 }
+
             } else {
-                // iOS Safari e tutti gli altri: camera passthrough + DeviceOrientation
+                // --- iOS Safari + tutto il resto: camera passthrough + DeviceOrientation ---
+                // getUserMedia DEVE essere la prima chiamata async per mantenere
+                // il contesto del gesto utente su iOS Safari
                 await startCamera();
                 await requestOrientationPermission();
                 document.getElementById('overlay').classList.add('hidden');
+                document.querySelector('a-scene').classList.add('ar-active');
                 spawnButterflies();
             }
+
         } catch (err) {
-            showError(err.message || String(err));
+            const msg = err?.message || String(err);
+            showError(msg.includes('Permission') || msg.includes('NotAllowed')
+                ? 'Permesso fotocamera negato. Ricarica la pagina e consenti l\'accesso.'
+                : 'Errore: ' + msg);
             btn.disabled = false;
             btn.textContent = 'START AR';
         }
     });
 });
-
-function showError(msg) {
-    const div = document.createElement('div');
-    div.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;z-index:9999;max-width:80%;text-align:center;';
-    div.textContent = msg;
-    document.body.appendChild(div);
-    setTimeout(() => div.remove(), 5000);
-}
