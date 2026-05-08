@@ -79,20 +79,17 @@ function proceed() {
     experienceActivated = true;
     window.removeEventListener('deviceorientation', tiltHandler);
     
-    calibMsg.innerHTML = '<h2>ANCORATO</h2>';
+    // UI Update
+    calibMsg.innerHTML = '<h2>AVVIO...</h2>';
+
+    // Force place 1.5m in front of user on the floor
+    const swarm = document.querySelector('#swarm');
+    swarm.setAttribute('position', '0 0 -1.5');
+    swarm.setAttribute('rotation', '0 0 0');
     
-    setTimeout(() => {
-      document.getElementById('overlay').classList.add('hidden');
-      const swarm = document.querySelector('#swarm');
-      
-      // Ensure the anchor is active before populating
-      swarm.addEventListener('xranchoradded', () => {
-        createSwarm(swarm);
-        console.log('Swarm populated on anchor');
-      }, {once: true});
-      
-      console.log('Waiting for anchor...');
-    }, 500);
+    document.getElementById('overlay').classList.add('hidden');
+    createSwarm(swarm);
+    console.log('AR Tunnel placed manually.');
   };
   // Tap attiva sempre (anche se non è verde, per non bloccare l'utente)
   calibMsg.addEventListener('click', activate);
