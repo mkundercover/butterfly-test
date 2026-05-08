@@ -45,18 +45,51 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ... (HUD code remains the same) ...
+// HUD debug visibile SUBITO al load
+if (DEBUG) {
+  window.addEventListener('DOMContentLoaded', () => {
+    const hud = document.createElement('div');
+    hud.id = 'debug-hud';
+    hud.style.cssText = 'position:fixed;top:10px;left:10px;z-index:9999;background:rgba(0,0,0,0.85);color:#fe5000;padding:8px 12px;font:12px ui-monospace,monospace;border:1px solid #fe5000;border-radius:4px;pointer-events:none';
+    hud.innerHTML = '<b>DEBUG ON</b> · attendi START';
+    document.body.appendChild(hud);
+
+    const btn = document.createElement('button');
+    btn.textContent = '↻ RIALLINEA';
+    btn.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:9999;background:#fe5000;color:#fff;border:none;padding:14px 28px;font:bold 16px ui-monospace,monospace;border-radius:8px;cursor:pointer';
+    btn.onclick = () => realignSwarm(true);
+    document.body.appendChild(btn);
+  });
+}
+
+// ──  Start flow  ───────────────────────────────────────────────────
+function startExperience() {
+  console.log('Start Experience clicked');
+  // iOS 13+ requires explicit permission request for DeviceOrientation
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(response => {
+      if (response === 'granted') { proceed(); }
+      else { alert('Permission denied. AR needs motion sensors.'); proceed(); }
+    }).catch(err => {
+      console.error(err);
+      proceed(); // fallback anyway
+    });
+  } else {
+    proceed();
+  }
+}
 
 function proceed() {
   document.getElementById('status-msg').classList.add('hidden');
   const calibMsg = document.getElementById('calibration-msg');
   calibMsg.classList.remove('hidden');
 
-  const activate = () => {
+  const activate = (forced = false) => {
     if (experienceActivated) return;
     
-    // Safety: don't activate if tracking isn't at least decent, unless forced by tap
-    if (!trackingIsNormal && !realityReadyFired) {
+    // Only wait for tracking if not forced (forced = tap on screen)
+    if (!forced && !trackingIsNormal && !realityReadyFired) {
       console.log('Waiting for stable tracking...');
       return;
     }
@@ -67,39 +100,34 @@ function proceed() {
     // Change UI to "Locking..." state
     calibMsg.innerHTML = '<h2>SINCRO IN CORSO...</h2><p>Resta immobile un istante</p>';
     
-    // Wait for the sensors to stabilize (Crucial to prevent the 20deg drift)
+    // Wait for the sensors to stabilize
     setTimeout(() => {
       document.getElementById('overlay').classList.add('hidden');
-      
-      // Perform the one-time alignment
       realignSwarm(false);
-      
       const swarm = document.querySelector('#swarm');
       if (DEBUG) addDebugWireframe(swarm);
       createSwarm(swarm);
-      
-      console.log('AR Tunnel Locked and Loaded');
     }, 800);
   };
 
-  // Trigger 1: tap anywhere
-  calibMsg.addEventListener('click', activate);
+  // Trigger 1: tap anywhere (FORCES activation)
+  calibMsg.addEventListener('click', () => activate(true));
 
-  // Trigger 2: tilt phone to vertical
+  // Trigger 2: tilt phone to vertical (beta > 70)
   const tiltHandler = (e) => {
-    if (e.beta !== null && Math.abs(e.beta) > 70 && trackingIsNormal) activate();
+    if (e.beta !== null && Math.abs(e.beta) > 70 && trackingIsNormal) activate(false);
   };
   window.addEventListener('deviceorientation', tiltHandler);
 
-  // Trigger 3: automatic fallback ONLY if tracking is solid
+  // Trigger 3: automatic fallback if tracking is solid
   const checkReady = setInterval(() => {
-    if (trackingIsNormal && realityReadyFired && experienceActivated === false) {
-      // Optional: could auto-activate here, but let's wait for tilt or tap for better UX
+    if (trackingIsNormal && realityReadyFired && !experienceActivated) {
+      // We don't auto-activate to allow user to be in position
     }
   }, 500);
   
-  // Hard fallback to ensure user isn't stuck
-  setTimeout(() => { clearInterval(checkReady); activate(); }, 15000);
+  // Hard fallback after 15s
+  setTimeout(() => { clearInterval(checkReady); activate(true); }, 15000);
 }
 
 // ──  Alignment  ────────────────────────────────────────────────────
@@ -113,48 +141,36 @@ function realignSwarm(updateHud) {
   
   threeCam.updateMatrixWorld(true);
 
-  // Get stable world position and orientation
   const pos = new THREE.Vector3();
   const q = new THREE.Quaternion();
   const scale = new THREE.Vector3();
   threeCam.matrixWorld.decompose(pos, q, scale);
 
-  // Direction vector (looking forward)
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
   fwd.y = 0; 
   fwd.normalize();
 
-  // Robust Yaw calculation
   let yawDeg = THREE.MathUtils.radToDeg(Math.atan2(fwd.x, -fwd.z));
 
-  // Anchor the swarm EXACTLY where the user is, but on the floor (Y=0)
-  // This ensures you are at the center of the edge.
   swarm.setAttribute('position', `${pos.x} 0 ${pos.z}`);
   swarm.setAttribute('rotation', `0 ${yawDeg} 0`);
-  
-  // Force the swarm to be a top-level world object
   swarm.object3D.updateMatrixWorld(true);
 
   const hud = document.getElementById('debug-hud');
   if (hud) {
-    hud.innerHTML = `<b>v6-LOCKED</b> · pos=(${pos.x.toFixed(2)},${pos.z.toFixed(2)}) yaw=${yawDeg.toFixed(1)}°`;
+    hud.innerHTML = `<b>v7-FIX</b> · pos=(${pos.x.toFixed(2)},${pos.z.toFixed(2)}) yaw=${yawDeg.toFixed(1)}°`;
   }
 }
 
 // ──  Swarm logic  ──────────────────────────────────────────────────
 function createSwarm(swarmContainer) {
   const numButterflies = 90;
-
-  // Physical space: 18m × 4.30m terrace.
-  // User stands at QR code — centre of the 18m edge, outside the terrace.
-  // Butterflies fill the rectangle in front: ±9m on X, 0.5m–4m on Z.
-  const tunnelLength = 22;   // 22m: overflows 17.40m terrace by ~2m each side
-  const zNear        = 0.0;  // start right at user's position
-  const zFar         = 5.0;  // 5m in front: overflows 4.30m terrace
-  const heightBase   = 2.5;  // metres above ground
-  const heightJitter = 0.5;  // ±0.5m natural variation
-
-  const numZSlots = 10; // depth lanes across 5m
+  const tunnelLength = 22;
+  const zNear        = 0.0;
+  const zFar         = 5.0;
+  const heightBase   = 2.5;
+  const heightJitter = 0.5;
+  const numZSlots = 10;
 
   const zSlots = Array.from({length: numZSlots}, (_, c) =>
     -(zNear + (c / (numZSlots - 1)) * (zFar - zNear))
@@ -206,23 +222,20 @@ function createSwarm(swarmContainer) {
 
 // ──  Debug wireframe overlay (?debug in URL)  ──────────────────────
 function addDebugWireframe(swarmContainer) {
-  // Mirror the exact constants from createSwarm
-  const tunnelLength = 22;   // X: ±11m
+  const tunnelLength = 22;
   const zNear        = 0.0;
-  const zFar         = 5.0;  // Z: 0–5m
+  const zFar         = 5.0;
   const heightBase   = 2.5;
   const heightJitter = 0.5;
   const numZSlots    = 10;
-
-  const depthSpan = zFar - zNear;                      // 3.5m
-  const centerZ   = -(zNear + depthSpan / 2);          // -2.25m
-  const centerY   = heightBase;                         // above SLAM ground (Y=0)
-  const boxHeight = heightJitter * 2;                   // 1m band
+  const depthSpan = zFar - zNear;
+  const centerZ   = -(zNear + depthSpan / 2);
+  const centerY   = heightBase;
+  const boxHeight = heightJitter * 2;
 
   const group = document.createElement('a-entity');
   group.id = 'debug-wireframe';
 
-  // ── Flight volume box ──────────────────────────────────────────────
   const box = document.createElement('a-box');
   box.setAttribute('position', `0 ${centerY} ${centerZ}`);
   box.setAttribute('width',  tunnelLength);
@@ -231,7 +244,6 @@ function addDebugWireframe(swarmContainer) {
   box.setAttribute('material', 'color: #fe5000; wireframe: true; opacity: 1');
   group.appendChild(box);
 
-  // ── Anchor marker: red sphere at swarm origin ─────────────────────
   const anchor = document.createElement('a-sphere');
   anchor.setAttribute('position', '0 0.1 0');
   anchor.setAttribute('radius', '0.25');
@@ -239,17 +251,14 @@ function addDebugWireframe(swarmContainer) {
   anchor.setAttribute('material', 'emissive: #ff0000; emissiveIntensity: 1');
   group.appendChild(anchor);
 
-  // ── Ground footprint (physical terrace outline) ────────────────────
-  const groundZ = -(zNear + depthSpan / 2);
   const floor = document.createElement('a-box');
-  floor.setAttribute('position', `0 0.01 ${groundZ}`);
+  floor.setAttribute('position', `0 0.01 ${centerZ}`);
   floor.setAttribute('width',  tunnelLength);
   floor.setAttribute('height', 0.02);
   floor.setAttribute('depth',  depthSpan);
   floor.setAttribute('material', 'color: #00aaff; wireframe: true; opacity: 1');
   group.appendChild(floor);
 
-  // ── Axis arrows ────────────────────────────────────────────────────
   ['x:1 0 0:#ff0000', 'y:0 1 0:#00ff00', 'z:0 0 -1:#0066ff'].forEach(s => {
     const [, dir, color] = s.split(':');
     const [dx, dy, dz] = dir.split(' ').map(Number);
@@ -258,7 +267,6 @@ function addDebugWireframe(swarmContainer) {
     group.appendChild(line);
   });
 
-  // ── Entry/exit cones ───────────────────────────────────────────────
   const start = document.createElement('a-cone');
   start.setAttribute('position', `${tunnelLength / 2} ${centerY} ${centerZ}`);
   start.setAttribute('rotation', '0 0 -90');
@@ -277,7 +285,6 @@ function addDebugWireframe(swarmContainer) {
   end.setAttribute('color', '#ff5500');
   group.appendChild(end);
 
-  // ── Z-slot depth markers ───────────────────────────────────────────
   for (let c = 0; c < numZSlots; c++) {
     const z = -(zNear + (c / (numZSlots - 1)) * depthSpan);
     const dot = document.createElement('a-sphere');
@@ -287,9 +294,5 @@ function addDebugWireframe(swarmContainer) {
     dot.setAttribute('material', 'opacity: 0.7; emissive: #444; emissiveIntensity: 0.5');
     group.appendChild(dot);
   }
-
   swarmContainer.appendChild(group);
-
-  const hud = document.getElementById('debug-hud');
-  if (hud) hud.innerHTML = `<b>DEBUG</b> · box 18×4.30m · farfalle ${heightBase}m · Z ${zNear}–${zFar}m`;
 }
