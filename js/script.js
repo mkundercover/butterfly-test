@@ -78,18 +78,28 @@ function proceed() {
     if (experienceActivated) return;
     experienceActivated = true;
     window.removeEventListener('deviceorientation', tiltHandler);
-    
-    // UI Update
-    calibMsg.innerHTML = '<h2>AVVIO...</h2>';
 
-    // Force place 1.5m in front of user on the floor
+    calibMsg.innerHTML = '<h2>ANCORATO</h2>';
+
     const swarm = document.querySelector('#swarm');
-    swarm.setAttribute('position', '0 0 -1.5');
-    swarm.setAttribute('rotation', '0 0 0');
-    
+    const hitTest = window.XR8.XrController.hitTest(0, 0);
+
+    if (hitTest.length > 0) {
+      const {position, rotation} = hitTest[0];
+      swarm.object3D.position.set(position.x, position.y, position.z);
+      swarm.object3D.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+    } else {
+      swarm.setAttribute('position', '0 0 -2');
+    }
+
+    // Stop matrix updates immediately
+    swarm.object3D.matrixAutoUpdate = false;
+    swarm.object3D.updateMatrix();
+
     document.getElementById('overlay').classList.add('hidden');
     createSwarm(swarm);
-    console.log('AR Tunnel placed manually.');
+    console.log('AR Tunnel hard-locked');
+  };
   };
   // Tap attiva sempre (anche se non è verde, per non bloccare l'utente)
   calibMsg.addEventListener('click', activate);
