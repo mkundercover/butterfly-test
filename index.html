@@ -33,15 +33,18 @@
       </div>
 
       <div id="calibration-msg" class="hidden">
-        <div class="icon-frame"></div>
-        <h2>POSITION YOUR DEVICE</h2>
-        <p>Keep your phone vertically in front of you</p>
-        <p style="margin-top:24px;font-size:0.8em;opacity:0.5">tap to continue</p>
+        <div class="icon-frame">
+          <div class="scan-animation"></div>
+        </div>
+        <h2>CALIBRAZIONE AR</h2>
+        <p>Inquadra il pavimento e muovi lentamente il telefono per calibrare lo spazio.</p>
+        <p style="margin-top:12px">Quando sei pronto, alza il telefono verticalmente.</p>
+        <p style="margin-top:24px;font-size:0.8em;opacity:0.5">oppure tocca per iniziare</p>
       </div>
     </div>
 
     <a-scene
-      xrweb="allowedDevices: mobile"
+      xrweb="allowedDevices: mobile; scale: absolute"
       renderer="colorManagement: true; antialias: true"
       vr-mode-ui="enabled: false">
       <a-assets>
