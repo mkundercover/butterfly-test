@@ -5,6 +5,20 @@ body {
   background: #000;
 }
 
+/* Feed camera posteriore: sfondo per modalità magic window (iOS + fallback) */
+#ar-video {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
+
+/* Canvas A-Frame trasparente: lascia vedere il feed camera dietro */
+canvas.a-canvas {
+  background: transparent !important;
+}
+
 /* A-Frame canvas must be transparent so 8thwall camera shows through */
 .a-enter-vr-button,
 .a-enter-ar-button {

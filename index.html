@@ -2,27 +2,38 @@
 <html lang="it">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <script>
+      // Impedisce al WebVR polyfill bundled in A-Frame di fare richieste TLS esterne
+      window.WebVRConfig = { DPDB_DATA: { devices: [] } };
       window.WebXRPolyfill = null;
-      window.WEBVR_POLYFILL_CONFIG = { FORCE_ENABLE_VR: false };
     </script>
     <title>Farfalle AR</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="vendor/aframe-extras-6.1.1.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
   </head>
   <body>
+    <!-- Feed camera: sfondo per iOS/fallback (magic window) -->
+    <video id="ar-video" autoplay playsinline muted></video>
+
     <div id="overlay">
-       <button id="start-btn" class="btn-start">START AR</button>
+      <button id="start-btn" class="btn-start">START AR</button>
     </div>
 
-    <a-scene webxr="requiredFeatures: hit-test, local-floor" renderer="logarithmicDepthBuffer: true; colorManagement: true;">
+    <a-scene
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+      renderer="alpha: true; colorManagement: true; antialias: true"
+      loading-screen="enabled: false">
       <a-assets>
         <a-asset-item id="butterflyModel" src="assets/models/animated_butterfly_fucsia.glb"></a-asset-item>
       </a-assets>
 
-      <a-camera position="0 1.6 0"></a-camera>
+      <a-camera position="0 1.6 0" look-controls="magicWindowTrackingEnabled: true"></a-camera>
       <a-entity id="swarm" position="0 0 -1.5"></a-entity>
     </a-scene>
+
     <script src="js/main.js"></script>
   </body>
 </html>
