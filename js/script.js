@@ -77,33 +77,17 @@ function proceed() {
   const activate = () => {
     if (experienceActivated) return;
     experienceActivated = true;
-    
     window.removeEventListener('deviceorientation', tiltHandler);
-    
-    // Feedback immediato
-    calibMsg.innerHTML = '<h2 style="color:#00ff00">ANCORAGGIO IN CORSO...</h2><p>Sto fissando la posizione. Resta immobile.</p>';
-    
-    // 1. RECENTER FORZATO
-    if (window.XR8) {
-      console.log('Chiamata XR8.recenter()');
-      window.XR8.recenter();
-    }
 
-    // 2. PAUSA DI STABILIZZAZIONE (Essenziale per evitare il salto di 20 gradi)
+    // UI Update
+    calibMsg.innerHTML = '<h2>ANCORAGGIO...</h2><p>Resta immobile, sto fissando il tunnel a terra</p>';
+
+    // Simply hide overlay. xrextras-anchor will take care of placing the swarm
     setTimeout(() => {
       document.getElementById('overlay').classList.add('hidden');
-      
-      const swarm = document.querySelector('#swarm');
-      
-      // Dopo il recenter, (0,0,0) è esattamente dove ti trovi e (0,0,0) rotazione è dritto davanti a te
-      swarm.setAttribute('position', '0 0 0');
-      swarm.setAttribute('rotation', '0 0 0');
-      
-      createSwarm(swarm);
-      if (DEBUG) addDebugWireframe(swarm);
-      
-      console.log('Tunnel ancorato a 0,0,0 dopo Recenter');
-    }, 1200);
+      createSwarm(document.querySelector('#swarm'));
+      console.log('AR Tunnel Locked to floor');
+    }, 500);
   };
 
   // Tap attiva sempre (anche se non è verde, per non bloccare l'utente)

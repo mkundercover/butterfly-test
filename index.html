@@ -9,6 +9,7 @@
     <script crossorigin="anonymous" src="vendor/8frame-1.5.0.min.js"></script>
     <script src="vendor/aframe-extras-6.1.1.min.js"></script>
     <script async crossorigin="anonymous" src="vendor/8thwall/xr.js" data-preload-chunks="slam"></script>
+    <script src="//cdn.8thwall.com/web/xrextras/xrextras.js"></script>
     <link rel="stylesheet" href="css/style.css">
   </head>
 
@@ -52,7 +53,9 @@
       </a-assets>
 
       <a-camera id="main-camera"></a-camera>
-      <a-entity id="swarm"></a-entity>
+      <!-- xrextras-anchor locks this entity permanently to the detected floor -->
+      <a-entity id="swarm" xrextras-anchor="name: swarm-anchor; scale: absolute;"></a-entity>
+
 
       <a-entity light="type: ambient; intensity: 1.2;"></a-entity>
       <a-entity light="type: directional; intensity: 1; position: 1 1 1;"></a-entity>
